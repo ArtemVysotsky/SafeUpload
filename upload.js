@@ -8,17 +8,19 @@
  */
 
 function Upload(file) {
-    const parent = this;
+    let parent = this;
     let properties = {
         file: file, hash: null, length: 1024, offset: 0, size: 0, iteration: 1,
-        time: null, speed: 0, pause: false, stop: false, retry: 10, error: null, debug: null};
+        time: null, speed: 0, pause: false, stop: false, error: null, debug: null,
+        retry: {count: 0, limit: 10, timeout: 5000}
+    };
     let callbacks = {
         start: null, pause: null, resume: null, stop: null,
-        iteration: null, finish: null, success: null, error: null};
+        iteration: null, finish: null, done: null, fail: null};
     let methods = {};
     this.setError = function(error) {
         properties.error = error;
-        if (!!callbacks.error) callbacks.error();
+        if (!!callbacks.error) callbacks.fail();
         if (!!callbacks.finish) callbacks.finish();
     };
     this.getError = function() {return properties.error;};
@@ -68,13 +70,20 @@ function Upload(file) {
     };
     methods.open = function() {
         methods.request('open', {}, {
-            'success': function(responce){
+            'done': function(responce){
                 properties.hash = responce.hash;
                 properties.time = new Date().getTime() / 1000;
                 methods.append();
+            },
+            'fail': function(jqXHR) {
+                if (properties.retry.count > properties.retry.limit) {
+                    parent.setError('При створенні файлу на сервері виникла помилка');
+                    return;
+                }
+                properties.retry.count ++;
+                methods.open();
             }
         });
-        
     };
     methods.append = function(){
         if (properties.pause !== false) {
@@ -89,7 +98,7 @@ function Upload(file) {
         let end = properties.offset + properties.length;
         let chunk = file.slice(properties.offset, end);
         methods.request('append', {chunk: chunk}, {
-            'success': function(responce){
+            'done': function(responce) {
                 let speed = (new Date().getTime() - timestamp) / 1000;
                 speed = Math.round((responce.size - properties.size) / speed);
                 if (speed > properties.speed) {
@@ -108,36 +117,81 @@ function Upload(file) {
                 properties.iteration ++;
                 if (!!callbacks.iteration) callbacks.iteration();
             },
-            'error': function(){
-                methods.remove();
-                return false;
+            'fail': function(jqXHR) {
+                properties.speed = 0;
+                methods.reappend();
             }
         });
     };
+    methods.reappend = function() {
+        if (properties.retry.count > properties.retry.limit) {
+            parent.setError('При завантажені файлу на сервер виникла помилка');
+            methods.remove();
+            return;
+        }
+        properties.retry.count ++;
+        console.log('upload.reappend: ' + properties.retry.count);
+        setTimeout(function() {
+            methods.request('size', null, {
+                'done': function(responce) {
+                    console.log('upload.reappend.done: ' + responce.size);
+                    properties.offset = responce.size;
+                    properties.retry.count = 0;
+                    methods.append();
+                },
+                'fail': function(jqXHR) {
+                    methods.reappend();
+                }
+            })
+        }, properties.retry.timeout);
+    };
     methods.close = function() {
         methods.request('close', {time: file.lastModified}, {
-            'success': function(responce){
+            'done': function(responce){
                 if (responce.size !== file.size)
                     parent.setError('Неправельний розмір завантаженого файлу');
                 properties.speed = (new Date().getTime() / 1000) - properties.time;
                 properties.speed = Math.round(properties.size / properties.speed);
-                if (!!callbacks.success) callbacks.success();
+                if (!!callbacks.done) callbacks.done();
                 if (!!callbacks.finish) callbacks.finish();
+            },
+            'fail': function(jqXHR) {
+                if (properties.retry.count > properties.retry.limit) {
+                    methods.remove();
+                    parent.setError('При переміщенні файла на сервері виникла помилка');
+                    return;
+                }
+                properties.retry.count ++;
+                methods.close();
             }
         });
     };
     methods.remove = function() {
-        methods.request('remove');
+        methods.request('remove', null, {
+            'done': function(responce) {
+                return true;
+            },
+            'fail': function(jqXHR) {
+                if (properties.retry.count > properties.retry.limit) {
+                    parent.setError('При видаленні файлу з сервера виникла помилка');
+                    return;
+                }
+                properties.retry.count ++;
+                methods.remove();
+            }
+        });
     };
     methods.request = function(action, data, callbacks) {
-        let retry = {count: 0, limit: properties.retry};
         let params = {
-            method: 'POST', url:'/api.php?action=' + action,
+            method: 'POST', url:'/api.php?action=' + action, data: {},
             text: 'text', dataType: 'json', cache: false, timeout: 10000};
-        params.data = (data !== undefined) ? data : {};
+        let debug = {iteration: properties.iteration, action: action};
+        if (!!data && (data !== undefined)) params.data = data;
         params.data.name = properties.file.name;
         if (!!properties.hash) params.data.hash = properties.hash;
         if (params.data.chunk !== undefined) {
+            debug.size = params.data.chunk.size;
+            debug.offset = properties.offset;
             let formData = new FormData();
             formData.append('name', params.data.name);
             formData.append('hash', params.data.hash);
@@ -146,42 +200,28 @@ function Upload(file) {
             params.processData = false;
             params.contentType = false;
         }
+        console.log(debug);
         $.ajax(params)
         .done(function(responce) {
             if (responce.length === 0) {
-                if (!!callbacks && !!callbacks.error) callbacks.error(responce);
+                if (!!callbacks && !!callbacks.fail) callbacks.fail(responce);
                 parent.setError('Відсутня відповідь');
                 return false;
             }
             if (typeof responce !== 'object') {
-                if (!!callbacks && !!callbacks.error) callbacks.error(responce);
+                if (!!callbacks && !!callbacks.fail) callbacks.fail(responce);
                 parent.setError('Відповідь неправильного типу (' + typeof responce + ')');
                 return false;
             }
             if (responce.exception !== undefined) {
-                if (!!callbacks && !!callbacks.error) callbacks.error(responce);
+                if (!!callbacks && !!callbacks.fail) callbacks.fail(responce);
                 parent.setError(responce.exception);
                 return false;
             }
-            if (!!callbacks && !!callbacks.success) callbacks.success(responce);
+            if (!!callbacks && !!callbacks.done) callbacks.done(responce);
         })
-        .fail(function(jqXHR, statusText) {
-            properties.debug = jqXHR.responseText;
-            if(statusText === 'timeout') {
-                retry.count ++;
-                if (retry.count <= retry.limit) {
-                    $.ajax(this);
-                    return true;
-                } else {
-                    parent.setError('При завантажені файлу на сервер виникла помилка');
-                    if (!!parentcallbacks.error) parentcallbacks.error(jqXHR);
-                    return false;
-                }
-            } else {
-                parent.setError('При завантажені файлу на сервер виникла помилка');
-                if (!!parent.callbacks.error) parent.callbacks.error(jqXHR);
-                return false;
-            }
+        .fail(function(jqXHR, textStatus, errorThrown) {
+            if (!!callbacks && !!callbacks.fail) callbacks.fail(jqXHR);
         });
     }
 }

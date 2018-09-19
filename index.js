@@ -61,7 +61,7 @@ $(document).ready(function(){
             nodes.pauseButton.attr('disabled', 'disabled');
             nodes.resumeButton.attr('disabled', 'disabled');
         });
-        upload.addListener('error',function() {
+        upload.addListener('fail',function() {
             nodes.uploadButton.attr('disabled', 'disabled');
             nodes.pauseButton.attr('disabled', 'disabled');
             nodes.resumeButton.attr('disabled', 'disabled');
