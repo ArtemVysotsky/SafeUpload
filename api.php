@@ -29,9 +29,7 @@ try {
         case 'close': $output['size'] = $file->close(($_POST['time']) ?? null); break;
        
         case 'remove': $file->remove(); break;
-        
-        case 'size': $output['size'] = $file->size(); break;
-    
+
         default: throw new Exception('Невідома дія');
     }
 
