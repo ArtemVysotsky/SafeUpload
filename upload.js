@@ -20,7 +20,7 @@ function Upload(file) {
     let methods = {};
     this.setError = function(error) {
         properties.error = error;
-        if (!!callbacks.error) callbacks.fail();
+        if (!!callbacks.fail) callbacks.fail();
         if (!!callbacks.finish) callbacks.finish();
     };
     this.getError = function() {return properties.error;};
@@ -124,12 +124,12 @@ function Upload(file) {
         });
     };
     methods.reappend = function() {
+        properties.retry.count ++;
         if (properties.retry.count > properties.retry.limit) {
             parent.setError('При завантажені файлу на сервер виникла помилка');
             methods.remove();
             return;
         }
-        properties.retry.count ++;
         console.log('upload.reappend: ' + properties.retry.count);
         setTimeout(function() {
             methods.request('size', null, {
