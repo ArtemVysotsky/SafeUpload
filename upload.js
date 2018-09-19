@@ -11,8 +11,8 @@ function Upload(file) {
     let parent = this;
     let properties = {
         file: file, hash: null, length: 1024, offset: 0, size: 0, iteration: 1,
-        time: null, speed: 0, pause: false, stop: false, error: null, debug: null,
-        retry: {count: 0, limit: 10, timeout: 5000}
+        time: null, speed: 0, pause: false, stop: false, timeout: 20000, error: null,
+        debug: null, retry: {count: 0, limit: 10, interval: 5000}
     };
     let callbacks = {
         start: null, pause: null, resume: null, stop: null,
@@ -143,7 +143,7 @@ function Upload(file) {
                     methods.reappend();
                 }
             })
-        }, properties.retry.timeout);
+        }, properties.retry.interval);
     };
     methods.close = function() {
         methods.request('close', {time: file.lastModified}, {
@@ -184,7 +184,7 @@ function Upload(file) {
     methods.request = function(action, data, callbacks) {
         let params = {
             method: 'POST', url:'/api.php?action=' + action, data: {},
-            text: 'text', dataType: 'json', cache: false, timeout: 10000};
+            text: 'text', dataType: 'json', cache: false, timeout: properties.timeout};
         let debug = {iteration: properties.iteration, action: action};
         if (!!data && (data !== undefined)) params.data = data;
         params.data.name = properties.file.name;
