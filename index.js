@@ -38,13 +38,13 @@ $(document).ready(function(){
         nodes.uploadButton.removeAttr('disabled');
         nodes.sizeTotalIndicator.val(Human.getSize(file.size));
         upload = new Upload(file);
-        upload.addListener('start',function() {
+        upload.addListener('start', function() {
             nodes.uploadButton.attr('disabled', 'disabled');
             nodes.pauseButton.removeAttr('disabled');
             nodes.cancelButton.removeAttr('disabled');
             timer = setInterval(updateIndicators, 1000);
         });
-        upload.addListener('pause',function() {
+        upload.addListener('pause', function() {
             nodes.pauseButton.attr('disabled', 'disabled');
             nodes.resumeButton.removeAttr('disabled');
         });
@@ -52,25 +52,25 @@ $(document).ready(function(){
             nodes.resumeButton.attr('disabled', 'disabled');
             nodes.pauseButton.removeAttr('disabled');
         });
-        upload.addListener('stop',function() {
+        upload.addListener('stop', function() {
+            nodes.uploadButton.attr('disabled', 'disabled');
+            nodes.pauseButton.attr('disabled', 'disabled');
+            nodes.resumeButton.attr('disabled', 'disabled');
+            nodes.cancelButton.attr('disabled', 'disabled');
+            nodes.form[0].reset();
             clearInterval(timer);
             updateIndicators();
-            nodes.form[0].reset();
-            nodes.cancelButton.attr('disabled', 'disabled');
-            nodes.uploadButton.attr('disabled', 'disabled');
-            nodes.pauseButton.attr('disabled', 'disabled');
-            nodes.resumeButton.attr('disabled', 'disabled');
         });
-        upload.addListener('fail',function() {
+        upload.addListener('fail', function() {
             nodes.uploadButton.attr('disabled', 'disabled');
             nodes.pauseButton.attr('disabled', 'disabled');
             nodes.resumeButton.attr('disabled', 'disabled');
-            nodes.cancelButton.attr('disabled', 'disabled');
             nodes.debug.html(upload.getDebug());
             clearInterval(timer);
-            alert('Помилка: ' + upload.getError());
-        });
-        upload.addListener('finish',function() {
+            updateIndicators();
+            alert('Помилка! ' + upload.getError());
+         });
+        upload.addListener('finish', function() {
             nodes.pauseButton.attr('disabled', 'disabled');
             nodes.resumeButton.attr('disabled', 'disabled');
             nodes.cancelButton.attr('disabled', 'disabled');

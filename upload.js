@@ -21,7 +21,6 @@ function Upload(file) {
     this.setError = function(error) {
         properties.error = error;
         if (!!callbacks.fail) callbacks.fail();
-        if (!!callbacks.finish) callbacks.finish();
     };
     this.getError = function() {return properties.error;};
     this.getIndicators = function() {
@@ -119,6 +118,14 @@ function Upload(file) {
             },
             'fail': function(jqXHR) {
                 properties.speed = 0;
+                if (jqXHR.status === 500) {
+                    if (jqXHR.responseJSON.exception !== undefined) {
+                        parent.setError(jqXHR.responseJSON.exception);
+                    } else {
+                        parent.setError('При завантажені файлу на сервер виникла невідома помилка');
+                    }
+                    return;
+                }
                 methods.reappend();
             }
         });
@@ -203,24 +210,9 @@ function Upload(file) {
         console.log(debug);
         $.ajax(params)
         .done(function(responce) {
-            if (responce.length === 0) {
-                if (!!callbacks && !!callbacks.fail) callbacks.fail(responce);
-                parent.setError('Відсутня відповідь');
-                return false;
-            }
-            if (typeof responce !== 'object') {
-                if (!!callbacks && !!callbacks.fail) callbacks.fail(responce);
-                parent.setError('Відповідь неправильного типу (' + typeof responce + ')');
-                return false;
-            }
-            if (responce.exception !== undefined) {
-                if (!!callbacks && !!callbacks.fail) callbacks.fail(responce);
-                parent.setError(responce.exception);
-                return false;
-            }
             if (!!callbacks && !!callbacks.done) callbacks.done(responce);
         })
-        .fail(function(jqXHR, textStatus, errorThrown) {
+        .fail(function(jqXHR) {
             if (!!callbacks && !!callbacks.fail) callbacks.fail(jqXHR);
         });
     }

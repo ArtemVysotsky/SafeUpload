@@ -31,6 +31,9 @@ class File {
     /** @var string Хеш файла */
     private $hash;
 
+    /** @var integer Максимальний розмір файла */
+    private $size = 1 * 1048576;
+
     /** @var boolean Ознака дозволу перезапису файлів з однаковою назвою */
     private $overwrite = true;
 
@@ -150,7 +153,13 @@ class File {
 
             throw new Exception('Неможливо записати дані в тимчасовий файл');
 
-        return $this->size($this->sourceTemporary);
+        $size = $this->size();
+
+        if ($size > $this->size)
+
+            throw new Exception('Розмір файла перевищує допустимий');
+
+        return $size;
     }
 
     /**

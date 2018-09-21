@@ -37,7 +37,7 @@ try {
 
 } catch (Exception $exception) {
 
-    header('HTTP/1.x 404 Not Found');
+    header('HTTP/1.x 500 Internal Server Error');
 
     $output['exception'] = $exception->getMessage();
 }
