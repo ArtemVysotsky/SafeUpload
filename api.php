@@ -18,7 +18,7 @@ try {
 
     require_once('File.php');
 
-    $file = new File($_POST['name'], ($_POST['hash']) ?? null);
+    $file = new File($_POST['name'], (($_POST['hash']) ?? null));
 
     switch($_GET['action']) {
 

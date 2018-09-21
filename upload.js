@@ -7,12 +7,12 @@
  * @copyright   Всі права застережено (c) 2018 Upload
  */
 
-function Upload(file) {
+function Upload(file, options) {
     let parent = this;
     let properties = {
         hash: null, length: 1024, offset: 0, size: 0, iteration: 1,
-        time: null, speed: 0, pause: false, stop: false, timeout: 20000,
-        error: null, debug: null, retry: {count: 0, limit: 10, interval: 5000}
+        time: null, speed: 0, pause: false, stop: false, timeout: 30000,
+        error: null, debug: null, retry: {count: 0, limit: 5, interval: 5000}
     };
     let callbacks = {
         start: null, pause: null, resume: null, stop: null,
@@ -213,6 +213,13 @@ function Upload(file) {
             if (!!callbacks && !!callbacks.fail) callbacks.fail(jqXHR);
         });
     };
-    if (!!file || (file === undefined))
-        this.setError('Відсутній обов\'язковий параметер файл');
+    if (options !== undefined) {
+        if (options.timeout !== undefined)
+            properties.timeout = options.timeout;
+        if (options.retry.limit !== undefined)
+            properties.retry.limit = options.retry.limit;
+        if (options.retry.interval !== undefined)
+            properties.retry.interval = options.retry.interval;
+    }
+    console.log(properties);
 }

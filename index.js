@@ -42,7 +42,7 @@ $(document).ready(function(){
         nodes.form[0].reset();
         nodes.uploadButton.removeAttr('disabled');
         nodes.sizeTotalIndicator.val(Human.getSize(file.size));
-        upload = new Upload(file);
+        upload = new Upload(file, {timeout: 3000, retry: {interval: 3000, limit: 5}});
         upload.addListener('start', function() {
             nodes.uploadButton.attr('disabled', 'disabled');
             nodes.pauseButton.removeAttr('disabled');
