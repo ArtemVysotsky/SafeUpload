@@ -32,7 +32,7 @@ class File {
     private $hash;
 
     /** @var integer Максимальний розмір файла */
-    private $size = 1 * 1048576;
+    private $size = 10 * 1048576;
 
     /** @var boolean Ознака дозволу перезапису файлів з однаковою назвою */
     private $overwrite = true;

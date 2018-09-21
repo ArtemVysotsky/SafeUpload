@@ -10,9 +10,9 @@
 function Upload(file) {
     let parent = this;
     let properties = {
-        file: file, hash: null, length: 1024, offset: 0, size: 0, iteration: 1,
-        time: null, speed: 0, pause: false, stop: false, timeout: 20000, error: null,
-        debug: null, retry: {count: 0, limit: 10, interval: 5000}
+        hash: null, length: 1024, offset: 0, size: 0, iteration: 1,
+        time: null, speed: 0, pause: false, stop: false, timeout: 20000,
+        error: null, debug: null, retry: {count: 0, limit: 10, interval: 5000}
     };
     let callbacks = {
         start: null, pause: null, resume: null, stop: null,
@@ -74,7 +74,7 @@ function Upload(file) {
                 properties.time = new Date().getTime() / 1000;
                 methods.append();
             },
-            'fail': function(jqXHR) {
+            'fail': function() {
                 if (properties.retry.count > properties.retry.limit) {
                     parent.setError('При створенні файлу на сервері виникла помилка');
                     return;
@@ -146,7 +146,7 @@ function Upload(file) {
                     properties.retry.count = 0;
                     methods.append();
                 },
-                'fail': function(jqXHR) {
+                'fail': function() {
                     methods.reappend();
                 }
             })
@@ -162,7 +162,7 @@ function Upload(file) {
                 if (!!callbacks.done) callbacks.done();
                 if (!!callbacks.finish) callbacks.finish();
             },
-            'fail': function(jqXHR) {
+            'fail': function() {
                 if (properties.retry.count > properties.retry.limit) {
                     methods.remove();
                     parent.setError('При переміщенні файла на сервері виникла помилка');
@@ -175,10 +175,7 @@ function Upload(file) {
     };
     methods.remove = function() {
         methods.request('remove', null, {
-            'done': function(responce) {
-                return true;
-            },
-            'fail': function(jqXHR) {
+            'fail': function() {
                 if (properties.retry.count > properties.retry.limit) {
                     parent.setError('При видаленні файлу з сервера виникла помилка');
                     return;
@@ -194,7 +191,7 @@ function Upload(file) {
             text: 'text', dataType: 'json', cache: false, timeout: properties.timeout};
         let debug = {iteration: properties.iteration, action: action};
         if (!!data && (data !== undefined)) params.data = data;
-        params.data.name = properties.file.name;
+        params.data.name = file.name;
         if (!!properties.hash) params.data.hash = properties.hash;
         if (params.data.chunk !== undefined) {
             debug.size = params.data.chunk.size;
@@ -215,5 +212,7 @@ function Upload(file) {
         .fail(function(jqXHR) {
             if (!!callbacks && !!callbacks.fail) callbacks.fail(jqXHR);
         });
-    }
+    };
+    if (!!file || (file === undefined))
+        this.setError('Відсутній обов\'язковий параметер файл');
 }

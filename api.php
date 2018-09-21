@@ -39,6 +39,8 @@ try {
 
     header('HTTP/1.x 500 Internal Server Error');
 
+    if (isset($file) && is_object($file)) $file->remove();
+
     $output['exception'] = $exception->getMessage();
 }
 

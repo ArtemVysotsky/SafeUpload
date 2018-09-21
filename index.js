@@ -10,6 +10,7 @@
 $(document).ready(function(){
     let file = timer = null;
     let upload = null;
+    const limit = 10 * 1048576;
     const nodes = new function() {
         this.main = $('main');
         this.warning = this.main.find('p.warning');
@@ -34,6 +35,10 @@ $(document).ready(function(){
     nodes.fileButton.change(function() {
         file = $(this)[0].files[0];
         if (file === undefined) return false;
+        if (file.size > limit) {
+            alert('Розмір файлу більше допустимого');
+            return;
+        }
         nodes.form[0].reset();
         nodes.uploadButton.removeAttr('disabled');
         nodes.sizeTotalIndicator.val(Human.getSize(file.size));
