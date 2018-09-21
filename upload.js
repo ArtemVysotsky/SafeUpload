@@ -12,7 +12,7 @@ function Upload(file, options) {
     let properties = {
         hash: null, length: 1024, offset: 0, size: 0, iteration: 1,
         time: null, speed: 0, pause: false, stop: false, timeout: 30000,
-        error: null, debug: null, retry: {count: 0, limit: 5, interval: 5000}
+        retry: {count: 0, limit: 5, interval: 5000}, debug: false, error: null
     };
     let callbacks = {
         start: null, pause: null, resume: null, stop: null,
@@ -38,7 +38,6 @@ function Upload(file, options) {
         }
         return indicators;
     };
-    this.getDebug = function() {return properties.debug;};
     this.addListener = function(handler, callback) {
         if (typeof callbacks[handler] === undefined) {
             this.setError('Невідомий метод зворотнього виклику ' + handler);
@@ -137,11 +136,11 @@ function Upload(file, options) {
             methods.remove();
             return;
         }
-        console.log('upload.reappend: ' + properties.retry.count);
+        if (properties.debug)
+            console.log('upload.reappend: ' + properties.retry.count);
         setTimeout(function() {
             methods.request('size', null, {
                 'done': function(responce) {
-                    console.log('upload.reappend.done: ' + responce.size);
                     properties.offset = responce.size;
                     properties.retry.count = 0;
                     methods.append();
@@ -194,8 +193,12 @@ function Upload(file, options) {
         params.data.name = file.name;
         if (!!properties.hash) params.data.hash = properties.hash;
         if (params.data.chunk !== undefined) {
+            let indicators = parent.getIndicators();
+            debug.percent = indicators.percent;
+            debug.speed = indicators.speed;
             debug.size = params.data.chunk.size;
             debug.offset = properties.offset;
+            debug.time = indicators.timeElapsed;
             let formData = new FormData();
             formData.append('name', params.data.name);
             formData.append('hash', params.data.hash);
@@ -204,7 +207,7 @@ function Upload(file, options) {
             params.processData = false;
             params.contentType = false;
         }
-        console.log(debug);
+        if (properties.debug) console.log(debug);
         $.ajax(params)
         .done(function(responce) {
             if (!!callbacks && !!callbacks.done) callbacks.done(responce);
@@ -220,6 +223,9 @@ function Upload(file, options) {
             properties.retry.limit = options.retry.limit;
         if (options.retry.interval !== undefined)
             properties.retry.interval = options.retry.interval;
+        if (options.debug !== undefined)
+            properties.debug = options.debug;
     }
-    console.log(properties);
+    if (properties.debug) console.log(file);
+    if (properties.debug) console.log(properties);
 }

@@ -7,6 +7,10 @@
  * @copyright   Всі права застережено (c) 2018 Upload
  */
 
+let url = new URL();
+const DEBUG = (url.isParam('debug') && (url.getParam('debug') === '1'));
+if (DEBUG) console.log('debug mode on');
+
 $(document).ready(function(){
     let file = timer = null;
     let upload = null;
@@ -28,7 +32,6 @@ $(document).ready(function(){
         this.speedIndicator = this.formMonitor.find('input.speed');
         this.timeElapsedIndicator = this.formMonitor.find('input.timeElapsed');
         this.timeEstimateIndicator = this.formMonitor.find('input.timeEstimate');
-        this.debug = this.main.find('div.debug');
     };
     nodes.warning.hide();
     nodes.main.find('div.form').show();
@@ -42,7 +45,7 @@ $(document).ready(function(){
         nodes.form[0].reset();
         nodes.uploadButton.removeAttr('disabled');
         nodes.sizeTotalIndicator.val(Human.getSize(file.size));
-        upload = new Upload(file, {timeout: 3000, retry: {interval: 3000, limit: 5}});
+        upload = new Upload(file, {timeout: 3000, retry: {interval: 3000, limit: 5}, debug: DEBUG});
         upload.addListener('start', function() {
             nodes.uploadButton.attr('disabled', 'disabled');
             nodes.pauseButton.removeAttr('disabled');
@@ -70,7 +73,6 @@ $(document).ready(function(){
             nodes.uploadButton.attr('disabled', 'disabled');
             nodes.pauseButton.attr('disabled', 'disabled');
             nodes.resumeButton.attr('disabled', 'disabled');
-            nodes.debug.html(upload.getDebug());
             clearInterval(timer);
             updateIndicators();
             alert('Помилка! ' + upload.getError());
@@ -83,10 +85,12 @@ $(document).ready(function(){
             updateIndicators();
         });
     });
+
     nodes.uploadButton.click(function() {upload.start();});
     nodes.pauseButton.click(function() {upload.pause();});
     nodes.resumeButton.click(function() {upload.resume();});
     nodes.cancelButton.click(function() {upload.stop();});
+
     function updateIndicators() {
         let indicators = upload.getIndicators();
         nodes.sizeUploadedIndicator.val(Human.getSize(indicators.sizeUploaded));
@@ -99,6 +103,22 @@ $(document).ready(function(){
 
 
 
+
+function URL() {
+    const url = window.location.search.substring(1);
+    const paramsString = url.split('&');
+    let params = {};
+    paramsString.forEach(function(param) {
+        let paramCurrent = param.split('=');
+        params[paramCurrent[0]] = paramCurrent[1];
+    });
+    this.isParam = function(name) {
+        return (params[name] !== undefined);
+    };
+    this.getParam = function(name) {
+        return (this.isParam(name)) ? params[name] : null;
+    };
+}
 
 
 class Human {
