@@ -2,9 +2,9 @@
  * Клас для роботи з завантаженням файла
  *
  * @author      Артем Висоцький <a.vysotsky@gmail.com>
- * @package     PHPUtils/Upload
- * @link        http://upload.loc
- * @copyright   Всі права застережено (c) 2018 Upload
+ * @package     Upload
+ * @link        http://upload.local
+ * @copyright   Всі права застережено (c) 2019 Upload
  */
 
 function Upload(file, options) {

@@ -3,9 +3,9 @@
  * Клас File для роботи з файлом завантаження
  *
  * @author      Артем Висоцький <a.vysotsky@gmail.com>
- * @package     PHPUtils/Upload
- * @link        http://upload.loc
- * @copyright   Всі права застережено (c) 2018 Upload
+ * @package     Upload
+ * @link        http://upload.local
+ * @copyright   Всі права застережено (c) 2019 Upload
  */
 
 class File {
@@ -22,14 +22,14 @@ class File {
     /** @var string Повна назва тимчасового файла з шляхом */
     private $sourceTemporary;
 
-    /** @var string Шлях до файлів */
-    private $path = __DIR__ . '/uploads';
-
-    /** @var string Шлях до тимчасових файлів */
-    private $pathTemporary = __DIR__  . '/uploads/.tmp';
-
     /** @var string Хеш файла */
     private $hash;
+
+    /** @var string Шлях до теки зберігання завантажених файлів */
+    private $path = __DIR__ . '/uploads';
+
+    /** @var string Шлях до теки тимчасового зберігання файлу під час завантження */
+    private $pathTemporary = __DIR__  . '/uploads/.tmp';
 
     /** @var integer Максимальний розмір файла */
     private $size = 10 * 1048576;
@@ -40,44 +40,80 @@ class File {
     /** @var array Перелік кодів та опису помилок завантаження файлів */
     protected $errors = array(
 
-        UPLOAD_ERR_INI_SIZE => 'Розмір зображення більший за допустимий в налаштуваннях сервера',
-
-        UPLOAD_ERR_FORM_SIZE => 'Розмір зображення більший за значення MAX_FILE_SIZE, вказаний в HTML-формі',
-
-        UPLOAD_ERR_PARTIAL => 'Зображення завантажено тільки частково',
-
-        UPLOAD_ERR_NO_FILE => 'Зображення не завантажено',
-
-        UPLOAD_ERR_NO_TMP_DIR => 'Відсутня тимчасова тека',
-
-        UPLOAD_ERR_CANT_WRITE => 'Не вдалось записати зображення на диск',
-
-        UPLOAD_ERR_EXTENSION => 'Сервер зупинив завантаження зображення',
+        UPLOAD_ERR_INI_SIZE     => 'Розмір зображення більший за допустимий в налаштуваннях сервера',
+        UPLOAD_ERR_FORM_SIZE    => 'Розмір зображення більший за значення MAX_FILE_SIZE, вказаний в HTML-формі',
+        UPLOAD_ERR_PARTIAL      => 'Зображення завантажено тільки частково',
+        UPLOAD_ERR_NO_FILE      => 'Зображення не завантажено',
+        UPLOAD_ERR_NO_TMP_DIR   => 'Відсутня тимчасова тека',
+        UPLOAD_ERR_CANT_WRITE   => 'Не вдалось записати зображення на диск',
+        UPLOAD_ERR_EXTENSION    => 'Сервер зупинив завантаження зображення',
     );
 
 
     /**
     * Конструктор класу
     *
-    * @param string $name Назва файлу
-    * @param string|null $hash Хеш файла
+    * @param string $name Назва файла
     */
-    public function __construct(string $name, string $hash = null) {
+    public function __construct(string $name) {
+
+        $this->setName($name);
+    }
+
+    /**
+     * Зберігає назву файла що завантажється
+     *
+     * @param string $name Назва файла
+     */
+    public function setName($name): void {
 
         $this->name = $name;
+
+        $this->setSource();
+    }
+
+    /**
+     * Створює та зберігає абсолютний шлях до файла
+     */
+    private function setSource(): void {
 
         $this->source = $this->path . DIRECTORY_SEPARATOR . $this->name;
 
         if (!$this->overwrite && file_exists($this->source))
 
             throw new Exception('Файл з такою назвою вже існує');
+    }
 
-        if (isset($hash)) {
+    /**
+     * Зберігає шлях до теки зберігання завантажених файлів
+     *
+     * @param string $path Шлях до теки
+     */
+    public function setPath($path): void {
 
-            $this->hash = $hash;
+        $this->path = $path;
+    }
 
-            $this->setTemporary();
-        }
+    /**
+     * Зберігає шлях до теки тимчасового зберігання файла під час завантження
+     *
+     * @param string $pathTemporary Шлях до теки
+     */
+    public function setPathTemporary($pathTemporary): void {
+
+        $this->pathTemporary = $pathTemporary;
+    }
+
+    /**
+     * Зберігає хеш файлу що завантажується
+     *
+     * @param string $hash Хеш файла
+     */
+    public function setHash($hash): void {
+
+        $this->hash = $hash;
+
+        $this->setTemporary();
     }
 
     /**
