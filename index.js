@@ -7,33 +7,28 @@
  * @copyright   Всі права застережено (c) 2019 Upload
  */
 
-let url = new URL();
-const DEBUG = (url.isParam('debug') && (url.getParam('debug') === '1'));
-if (DEBUG) console.log('debug mode on');
-
 $(document).ready(function(){
-    let file = timer = null;
-    let upload = null;
-    const limit = 10 * 1048576;
+    let file, timer, upload;
+    const limit = 100 * 1048576;
     const nodes = new function() {
         this.main = $('main');
-        this.warning = this.main.find('p.warning');
+        this.alert = this.main.find('div.alert');
         this.form = this.main.find('form');
-        this.formControl = this.form.find('div.control');
-        this.formMonitor = this.form.find('div.monitor');
-        this.fileButton = this.form.find('input.file');
-        this.uploadButton = this.formControl.find('input.upload');
-        this.pauseButton = this.formControl.find('input.pause');
-        this.resumeButton = this.formControl.find('input.resume');
-        this.cancelButton = this.formControl.find('input.cancel');
-        this.sizeTotalIndicator = this.formMonitor.find('input.sizeTotal');
-        this.sizeUploadedIndicator = this.formMonitor.find('input.sizeUploaded');
-        this.percentIndicator = this.formMonitor.find('input.percent');
-        this.speedIndicator = this.formMonitor.find('input.speed');
-        this.timeElapsedIndicator = this.formMonitor.find('input.timeElapsed');
-        this.timeEstimateIndicator = this.formMonitor.find('input.timeEstimate');
+        this.fileForm = this.form.find('div.file');
+        this.progressForm = this.form.find('div.progress');
+        this.controlForm = this.form.find('div.control');
+        this.statusForm = this.form.find('div.status');
+        this.fileButton = this.fileForm.find('input');
+        this.progressBar = this.progressForm.find('div.progress-bar');
+        this.uploadButton = this.controlForm.find('input.upload');
+        this.pauseButton = this.controlForm.find('input.pause');
+        this.resumeButton = this.controlForm.find('input.resume');
+        this.cancelButton = this.controlForm.find('input.cancel');
+        this.sizeIndicator = this.fileForm.find('span');
+        this.speedIndicator = this.statusForm.find('span.speed');
+        this.timeIndicator = this.statusForm.find('span.time');
     };
-    nodes.warning.hide();
+    nodes.alert.hide();
     nodes.main.find('div.form').show();
     nodes.fileButton.change(function() {
         file = $(this)[0].files[0];
@@ -44,8 +39,8 @@ $(document).ready(function(){
         }
         nodes.form[0].reset();
         nodes.uploadButton.removeAttr('disabled');
-        nodes.sizeTotalIndicator.val(Human.getSize(file.size));
-        upload = new Upload(file, {timeout: 3000, retry: {interval: 3000, limit: 5}, debug: DEBUG});
+        nodes.sizeIndicator.text('('+Human.size(file.size)+')');
+        upload = new Upload(file, {timeout: 3000, retry: {interval: 3000, limit: 5}});
         upload.addListener('start', function() {
             nodes.uploadButton.attr('disabled', 'disabled');
             nodes.pauseButton.removeAttr('disabled');
@@ -61,23 +56,31 @@ $(document).ready(function(){
             nodes.pauseButton.removeAttr('disabled');
         });
         upload.addListener('stop', function() {
+            clearInterval(timer);
+            updateIndicators();
+            nodes.form[0].reset();
+            nodes.fileButton.removeAttr('disabled');
+            nodes.cancelButton.attr('disabled', 'disabled');
+            nodes.uploadButton.attr('disabled', 'disabled');
+            nodes.pauseButton.attr('disabled', 'disabled');
+            nodes.resumeButton.attr('disabled', 'disabled');
+            nodes.progressBar.css('width', 0).text(null);
+            nodes.sizeIndicator.text(null);
+            nodes.speedIndicator.text(null);
+            nodes.timeIndicator.text(null);
+        });
+        upload.addListener('fail', function() {
+            nodes.fileButton.removeAttr('disabled');
             nodes.uploadButton.attr('disabled', 'disabled');
             nodes.pauseButton.attr('disabled', 'disabled');
             nodes.resumeButton.attr('disabled', 'disabled');
             nodes.cancelButton.attr('disabled', 'disabled');
-            nodes.form[0].reset();
-            clearInterval(timer);
-            updateIndicators();
-        });
-        upload.addListener('fail', function() {
-            nodes.uploadButton.attr('disabled', 'disabled');
-            nodes.pauseButton.attr('disabled', 'disabled');
-            nodes.resumeButton.attr('disabled', 'disabled');
             clearInterval(timer);
             updateIndicators();
             alert('Помилка! ' + upload.getError());
-         });
+        });
         upload.addListener('finish', function() {
+            nodes.fileButton.removeAttr('disabled');
             nodes.pauseButton.attr('disabled', 'disabled');
             nodes.resumeButton.attr('disabled', 'disabled');
             nodes.cancelButton.attr('disabled', 'disabled');
@@ -93,36 +96,21 @@ $(document).ready(function(){
 
     function updateIndicators() {
         let indicators = upload.getIndicators();
-        nodes.sizeUploadedIndicator.val(Human.getSize(indicators.sizeUploaded));
-        nodes.percentIndicator.val(indicators.percent + ' %');
-        nodes.speedIndicator.val(Human.getSize(indicators.speed) + '/c');
-        nodes.timeElapsedIndicator.val(Human.getTime(indicators.timeElapsed));
-        nodes.timeEstimateIndicator.val(Human.getTime(indicators.timeEstimate));
+        nodes.progressBar
+            .css('width', indicators.percent + '%')
+            .text(Human.size(indicators.size) + ' (' + indicators.percent + '%)');
+        nodes.speedIndicator.text(
+            Human.size(indicators.speed) + '/c' + ' (' + Human.size(indicators.chunk) + ')'
+        );
+        nodes.timeIndicator.text(
+            Human.time(indicators.timeElapsed) + ' / ' + Human.time(indicators.timeEstimate)
+        );
     }
 });
 
 
-
-
-function URL() {
-    const url = window.location.search.substring(1);
-    const paramsString = url.split('&');
-    let params = {};
-    paramsString.forEach(function(param) {
-        let paramCurrent = param.split('=');
-        params[paramCurrent[0]] = paramCurrent[1];
-    });
-    this.isParam = function(name) {
-        return (params[name] !== undefined);
-    };
-    this.getParam = function(name) {
-        return (this.isParam(name)) ? params[name] : null;
-    };
-}
-
-
 class Human {
-    static getSize(bytes) {
+    static size(bytes) {
         const thousand = 1000;
         if(Math.abs(bytes) < thousand) return bytes + ' B';
         let i = -1;
@@ -131,7 +119,7 @@ class Human {
         } while(Math.abs(bytes) >= thousand && i < units.length - 1);
         return bytes.toFixed(1)+' '+units[i];
     }
-    static getTime(interval) {
+    static time(interval) {
         let hours = Math.floor(((interval % 31536000) % 86400) / 3600);
         let minutes = Math.floor((((interval % 31536000) % 86400) % 3600) / 60);
         let seconds = (((interval % 31536000) % 86400) % 3600) % 60;

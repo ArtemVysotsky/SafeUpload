@@ -25,14 +25,15 @@ function Upload(file, options) {
     this.getError = function() {return properties.error;};
     this.getIndicators = function() {
         let indicators = {};
-        indicators.sizeUploaded = properties.size;
+        indicators.chunk = properties.length;
+        indicators.size = properties.size;
         indicators.percent = Math.round(properties.size * 100 / file.size);
         indicators.speed = properties.speed;
         indicators.time = new Date().getTime() / 1000;
         indicators.timeElapsed = Math.round(indicators.time - properties.time);
         if (properties.speed > 0) {
-        indicators.timeEstimate = file.size / (properties.size / indicators.timeElapsed);
-        indicators.timeEstimate = Math.round(indicators.timeEstimate - indicators.timeElapsed);
+            indicators.timeEstimate = file.size / (properties.size / indicators.timeElapsed);
+            indicators.timeEstimate = Math.round(indicators.timeEstimate - indicators.timeElapsed);
         } else {
             indicators.timeEstimate = 0;
         }
@@ -116,6 +117,7 @@ function Upload(file, options) {
                 if (!!callbacks.iteration) callbacks.iteration();
             },
             'fail': function(jqXHR) {
+                /** @namespace jqXHR.responseJSON **/
                 properties.speed = 0;
                 if (jqXHR.status === 500) {
                     if (jqXHR.responseJSON.exception !== undefined) {
@@ -189,7 +191,7 @@ function Upload(file, options) {
             method: 'POST', url:'/api.php?action=' + action, data: {},
             text: 'text', dataType: 'json', cache: false, timeout: properties.timeout};
         let debug = {iteration: properties.iteration, action: action};
-        if (!!data && (data !== undefined)) params.data = data;
+        if (!!data) params.data = data;
         params.data.name = file.name;
         if (!!properties.hash) params.data.hash = properties.hash;
         if (params.data.chunk !== undefined) {
