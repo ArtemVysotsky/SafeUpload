@@ -10,12 +10,6 @@
 
 $output = [];
 
-// Шлях до теки зберігання завантажених файлів
-$path = __DIR__ . '/uploads';
-
-// Шлях до теки тимчасового зберігання файла під час завантження
-$pathTemporary = __DIR__  . '/uploads/.tmp';
-
 require_once('File.php');
 
 try {
@@ -24,18 +18,7 @@ try {
 
     if (!isset($_POST['name'])) throw new Exception('Відсутня назва файлу');
 
-    $file = new File($_POST['name']);
-
-    // Встановлюємо шлях до теки зберігання завантажених файлів
-    $file->setPath(__DIR__ . '/uploads');
-
-    // Встановлюємо шлях до теки тимчасового зберігання файла під час завантження
-    $file->setPathTemporary(__DIR__  . '/uploads/.tmp');
-
-    // Встановлюємо хеш файлу що завантажується
-    if (isset($_POST['hash'])) $file->setHash($_POST['hash']);
-
-
+    $file = new File($_POST['name'], $_POST['hash'] ?? null);
 
     switch($_GET['action']) {
 

@@ -22,14 +22,14 @@ class File {
     /** @var string Повна назва тимчасового файла з шляхом */
     private $sourceTemporary;
 
-    /** @var string Хеш файла */
-    private $hash;
-
     /** @var string Шлях до теки зберігання завантажених файлів */
     private $path = __DIR__ . '/uploads';
 
     /** @var string Шлях до теки тимчасового зберігання файлу під час завантження */
     private $pathTemporary = __DIR__  . '/uploads/.tmp';
+
+    /** @var string Хеш файла */
+    private $hash;
 
     /** @var integer Максимальний розмір файла */
     private $size = 10 * 1048576;
@@ -54,66 +54,24 @@ class File {
     * Конструктор класу
     *
     * @param string $name Назва файла
+    * @param string|null $hash Хеш файла
     */
-    public function __construct(string $name) {
-
-        $this->setName($name);
-    }
-
-    /**
-     * Зберігає назву файла що завантажється
-     *
-     * @param string $name Назва файла
-     */
-    public function setName($name): void {
+    public function __construct(string $name, string $hash = null) {
 
         $this->name = $name;
-
-        $this->setSource();
-    }
-
-    /**
-     * Створює та зберігає абсолютний шлях до файла
-     */
-    private function setSource(): void {
 
         $this->source = $this->path . DIRECTORY_SEPARATOR . $this->name;
 
         if (!$this->overwrite && file_exists($this->source))
 
             throw new Exception('Файл з такою назвою вже існує');
-    }
 
-    /**
-     * Зберігає шлях до теки зберігання завантажених файлів
-     *
-     * @param string $path Шлях до теки
-     */
-    public function setPath($path): void {
+        if (isset($hash)) {
 
-        $this->path = $path;
-    }
+            $this->hash = $hash;
 
-    /**
-     * Зберігає шлях до теки тимчасового зберігання файла під час завантження
-     *
-     * @param string $pathTemporary Шлях до теки
-     */
-    public function setPathTemporary($pathTemporary): void {
-
-        $this->pathTemporary = $pathTemporary;
-    }
-
-    /**
-     * Зберігає хеш файлу що завантажується
-     *
-     * @param string $hash Хеш файла
-     */
-    public function setHash($hash): void {
-
-        $this->hash = $hash;
-
-        $this->setTemporary();
+            $this->setTemporary();
+        }
     }
 
     /**

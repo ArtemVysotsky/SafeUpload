@@ -1,5 +1,5 @@
 <!--
-Скрипт для роботи з завантаженням файла
+Сторінка керування завантаженням файлів
 
 @author      Артем Висоцький <a.vysotsky@gmail.com>
 @package     Upload
@@ -10,46 +10,54 @@
 <html xml:lang="uk" lang="uk" dir="ltr">
     <head>
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-        <title>Безпечне завантаження файлів</title>
+        <title>Безпечне завантаження великих файлів</title>
         <meta name="description" content="завантаження, безпечне завантаження, безпечне завантаження файлів, upload, safe upload, safe file upload">
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous" />
         <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=1">
         <style>
-            main p.warning {color:red;}
-            main div.form {display:none;}
-            main div.form div.control {margin-top: 30px;}
-            main div.form div.monitor {margin-top: 30px;}
-            main div.form div.monitor input {width:70px; text-align: right;}
+            main div.card {max-width: 480px;}
+            main div.form {display: none;}
+            main div.form div.progress {height: 30px;}
+            main div.form div.control {}
+            main div.form div.status {height: 13px; display: flex; justify-content: space-between;}
+            main div.form div.status span {}
             main div.debug {margin-top: 20px;}
-       </style>
+        </style>
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+        <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
         <script src="/upload.js" type="application/javascript"></script>
         <script src="/index.js" type="application/javascript"></script>
     </head>
     <body>
-        <main>
-            <h1>Безпечне завантаження файлів</h1>
-            <p class="warning">Для роботи тестового скрипта необхідна підтримка JavaScript</p>
-            <div class="form">
-                <form>
-                    <p><input type="file" name="file" class="file" /></p>
-                    <div class="control">
-                        <p>
-                            <input type="button" name="upload" value="Upload" class="upload" disabled="disabled" />
-                            <input type="button" name="pause" value="Pause" class="pause" disabled="disabled" />
-                            <input type="button" name="resume" value="Resume" class="resume" disabled="disabled" />
-                            <input type="button" name="cancel" value="Cancel" class="cancel" disabled="disabled" />
-                        </p>
+        <main class="container mt-5">
+            <div class="alert alert-danger mt-5">Для роботи тестового скрипта необхідна підтримка JavaScript</div>
+            <div class="container">
+                <div class="card mx-auto mt-5">
+                    <div class="card-body">
+                        <h5 class="card-title">Безпечне завантаження великих файлів</h5>
+                        <hr />
+                        <div class="form">
+                            <form>
+                                <div class="file mt-4"><input type="file" name="file" /><span></span></div>
+                                <div class="progress mt-4">
+                                    <div class="progress-bar" role="progressbar" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <div class="status small mt-2">
+                                    <span class="speed" title="Швидкість завантаження (розмір частини файлу)"></span>
+                                    <span class="time" title="Часу пройшло / лишилось"></span>
+                                </div>
+                                <div class="control mt-4">
+                                    <input type="button" name="upload" value="Upload" disabled="disabled" class="btn btn-primary upload" />
+                                    <input type="button" name="pause" value="Pause" disabled="disabled" class="btn btn-warning pause" />
+                                    <input type="button" name="resume" value="Resume" disabled="disabled" class="btn btn-success resume" />
+                                    <input type="button" name="cancel" value="Cancel" disabled="disabled" class="btn btn-danger cancel" />
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                    <div class="monitor">
-                        <p><label><input type="text" name="sizeTotal" value="0" readonly="readonly" class="sizeTotal" /> Загальний розмір файлу</label></p>
-                        <p><label><input type="text" name="sizeUploaded" value="0" readonly="readonly" class="sizeUploaded" /> Розмір завантежених даних</label></p>
-                        <p><label><input type="text" name="percent" value="0" readonly="readonly" class="percent" /> Відсоток завантажених даних</label></p>
-                        <p><label><input type="text" name="speed" value="0" readonly="readonly" class="speed" /> Швидкість завантаження</label></p>
-                        <p><label><input type="text" name="timeElapsed" value="00:00:00" readonly="readonly" class="timeElapsed" /> Часу пройшло</label></p>
-                        <p><label><input type="text" name="timeEstimate" value="00:00:00" readonly="readonly" class="timeEstimate" /> Часу лишилось</label></p>
-                    </div>
-                </form>
+                </div>
             </div>
+            <div class="debug mt-5"></div>
         </main>
     </body>
 </html>
