@@ -124,12 +124,9 @@ class File {
      */
     public function append(array $chunk): int {
 
-        if ($chunk['error'] !== 0) {
+        if ($chunk['error'] !== 0)
 
-            $error = $chunk['error'];
-
-            throw new Exception('Помилка завантаження: ' . $this->errors[$error]);
-        }
+            throw new Exception('Помилка завантаження: ' . $this->errors[$chunk['error']]);
 
         if (!is_uploaded_file($chunk['tmp_name']))
 

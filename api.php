@@ -30,7 +30,7 @@ try {
 
         case 'remove': $file->remove(); break;
 
-        //case 'size': $output['size'] = $file->size(); break;
+        case 'size': $output['size'] = $file->size(); break;
 
         default: throw new Exception('Невідома дія');
     }
@@ -44,6 +44,8 @@ try {
     $output['exception'] = $exception->getMessage();
 }
 
-$output['debug'] = ['$_GET' => $_GET, '$_POST' => $_POST, '$_FILES' => $_FILES];
+if (isset($_GET['debug']) && ($_GET['debug'] == 1))
+
+    $output['debug'] = ['$_GET' => $_GET, '$_POST' => $_POST, '$_FILES' => $_FILES];
 
 echo json_encode($output, JSON_UNESCAPED_UNICODE);
