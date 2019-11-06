@@ -23,21 +23,20 @@ function Upload(file, options) {
         if (!!callbacks.fail) callbacks.fail();
     };
     this.getError = function() {return properties.error;};
-    this.getIndicators = function() {
-        let indicators = {};
-        indicators.chunk = properties.length;
-        indicators.size = properties.size;
-        indicators.percent = Math.round(properties.size * 100 / file.size);
-        indicators.speed = properties.speed;
-        indicators.time = new Date().getTime() / 1000;
-        indicators.timeElapsed = Math.round(indicators.time - properties.time);
+    this.getSize = function() {return properties.size;};
+    this.getStatus = function() {
+        let status = {};
+        status.chunk = properties.length;
+        status.speed = properties.speed;
+        status.time = new Date().getTime() / 1000;
+        status.timeElapsed = Math.round(status.time - properties.time);
         if (properties.speed > 0) {
-            indicators.timeEstimate = file.size / (properties.size / indicators.timeElapsed);
-            indicators.timeEstimate = Math.round(indicators.timeEstimate - indicators.timeElapsed);
+            status.timeEstimate = file.size / (properties.size / status.timeElapsed);
+            status.timeEstimate = Math.round(status.timeEstimate - status.timeElapsed);
         } else {
-            indicators.timeEstimate = 0;
+            status.timeEstimate = 0;
         }
-        return indicators;
+        return status;
     };
     this.addListener = function(handler, callback) {
         if (typeof callbacks[handler] === undefined) {
@@ -195,12 +194,11 @@ function Upload(file, options) {
         params.data.name = file.name;
         if (!!properties.hash) params.data.hash = properties.hash;
         if (params.data.chunk !== undefined) {
-            let indicators = parent.getIndicators();
-            debug.percent = indicators.percent;
-            debug.speed = indicators.speed;
+            let status = parent.getStatus();
+            debug.speed = status.speed;
             debug.size = params.data.chunk.size;
             debug.offset = properties.offset;
-            debug.time = indicators.timeElapsed;
+            debug.time = status.timeElapsed;
             let formData = new FormData();
             formData.append('name', params.data.name);
             formData.append('hash', params.data.hash);
