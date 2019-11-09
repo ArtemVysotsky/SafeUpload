@@ -8,7 +8,7 @@
  */
 
 $(document).ready(function() {
-    const limit = 100 * 1048576;
+    const limit = 100 * 1048576, interval = {status: 1000, size: 100};
     let file, upload, timer = {status: {}, size: null};
     let nodes = new function() {
         this.main = $('main');
@@ -30,53 +30,51 @@ $(document).ready(function() {
         this.timeIndicator = this.statusForm.find('span.time');
     };
 
-    nodes.alert.css('visibility', 'hidden').click(function(){
-        $(this).css('visibility', 'hidden');
-    });
-    nodes.card.css('visibility', 'visible');
+    nodes.alert.toggle().click(function(){$(this).hide();});
+    nodes.card.show();
 
     nodes.fileButton.change(function() {
+        console.log('nodes.fileButton.change');
         console.log($(this)[0].files[0]);
         file = $(this)[0].files[0];
         if (file === undefined) return false;
         if (file.size > limit) {
-            nodes.alert
-                .text('Розмір файлу більше допустимого')
-                .css('visibility', 'visible');
+            nodes.alert.text('Розмір файлу більше допустимого').show();
+            nodes.form[0].reset();
+            file = null;
             return;
         }
-        //nodes.form[0].reset();
-        nodes.uploadButton.prop('disabled', false);
+        nodes.uploadButton.enable();
         nodes.sizeIndicator.text('('+Human.size(file.size)+')');
         nodes.speedIndicator.text(null);
         nodes.timeIndicator.text(null);
         nodes.progressBar.css('width', 0).text(null);
         upload = new Upload(file, {timeout: 3000, retry: {interval: 3000, limit: 5}});
         upload.addListener('done', function() {
-            nodes.fileButton.prop('disabled', false);
-            nodes.pauseButton.prop('disabled', true);
-            nodes.resumeButton.prop('disabled', true);
-            nodes.cancelButton.prop('disabled', true);
-            setTimeout(function(){clearInterval(timer.status, timer.size);}, 1000);
+            nodes.fileButton.enable();
+            nodes.pauseButton.disable();
+            nodes.resumeButton.disable();
+            nodes.cancelButton.disable();
+            clearIntervalAll();
         });
         upload.addListener('fail', function () {
-            nodes.fileButton.prop('disabled', false);
-            //nodes.uploadButton.prop('disabled', true);
-            nodes.pauseButton.prop('disabled', true);
-            nodes.resumeButton.prop('disabled', true);
-            nodes.cancelButton.prop('disabled', true);
-            setTimeout(function(){clearInterval(timer.status, timer.size);}, 1000);
+            nodes.fileButton.enable();
+            nodes.uploadButton.disable();
+            nodes.pauseButton.disable();
+            nodes.resumeButton.disable();
+            nodes.cancelButton.disable();
+            clearIntervalAll();
             nodes.alert.text('Помилка! ' + upload.getError()).visibility('visible');
         });
         console.log(upload);
     });
 
     nodes.uploadButton.click(function() {
-        console.log($(this)); //this.startEvent()
-        nodes.fileButton.prop('disabled', true);
-        nodes.uploadButton.prop('disabled', true);
-        nodes.pauseButton.prop('disabled', false);
-        nodes.cancelButton.prop('disabled', false);
+        console.log('nodes.uploadButton.click');
+        nodes.pauseButton.enable();
+        nodes.cancelButton.enable();
+        nodes.fileButton.disable();
+        nodes.uploadButton.disable();
         timer.status = setInterval(function(){
             let status = upload.getStatus();
             nodes.speedIndicator.text(
@@ -85,27 +83,51 @@ $(document).ready(function() {
             nodes.timeIndicator.text(
                 Human.time(status.timeElapsed) + ' / ' + Human.time(status.timeEstimate)
             );
-        }, 1000);
+        }, interval.status);
         timer.size = setInterval(function(){
             let size = upload.getSize();
             let percent = Math.round(size * 100 / file.size);
             nodes.progressBar.css('width',  percent + '%')
                 .text(Human.size(size) + ' (' + percent + '%)');
-        }, 100);
+        }, interval.size);
         upload.start();
     });
 
     nodes.pauseButton.click(function() {
-        console.log($(this)); //this.pauseEvent()
+        console.log('nodes.pauseButton.click');
+        nodes.resumeButton.enable();
+        nodes.pauseButton.disable();
+        upload.pause();
     });
 
     nodes.resumeButton.click(function() {
-        console.log($(this)); //this.resumeEvent()
+        console.log('nodes.resumeButton.click');
+        nodes.pauseButton.enable();
+        nodes.resumeButton.disable();
+        upload.resume();
     });
 
     nodes.cancelButton.click(function() {
-        console.log($(this)); //this.stopEvent()
+        console.log('nodes.cancelButton.click');
+        nodes.form[0].reset();
+        clearIntervalAll();
+        nodes.fileButton.enable();
+        nodes.uploadButton.disable();
+        nodes.pauseButton.disable();
+        nodes.resumeButton.disable();
+        nodes.cancelButton.disable();
+        upload.cancel();
     });
+
+    function clearIntervalAll() {
+        setTimeout(function(){
+            clearInterval(timer.status);
+            clearInterval(timer.size);
+        }, interval.status);
+    }
+
+    jQuery.fn.enable = function() {return this.prop('disabled', false);};
+    jQuery.fn.disable = function() {return this.prop('disabled', true);};
 });
 
 

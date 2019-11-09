@@ -14,9 +14,7 @@ function Upload(file, options) {
         time: null, speed: 0, pause: false, stop: false, timeout: 30000,
         retry: {count: 0, limit: 5, interval: 5000}, debug: false, error: null
     };
-    let callbacks = {
-        start: null, pause: null, resume: null, stop: null,
-        iteration: null, finish: null, done: null, fail: null};
+    let callbacks = {done: null, fail: null};
     let methods = {};
     this.setError = function(error) {
         properties.error = error;
@@ -45,26 +43,18 @@ function Upload(file, options) {
         }
         callbacks[handler] = callback;
     };
-    this.start = function() {
-        methods.open();
-        if (!!callbacks.start) callbacks.start();
-    };
-    this.pause = function() {
-        properties.pause = true;
-        if (!!callbacks.pause) callbacks.pause();
-    };
+    this.start = function() {methods.open();};
+    this.pause = function() {properties.pause = true;};
     this.resume = function() {
         properties.pause = false;
         methods.append();
-        if (!!callbacks.resume) callbacks.resume();
     };
-    this.stop = function() {
+    this.cancel = function() {
         if (properties.pause !== false) {
             methods.remove();
         } else {
             properties.stop = true;
         }
-        if (!!callbacks.stop) callbacks.stop();
     };
     methods.open = function() {
         methods.request('open', {}, {
@@ -139,18 +129,18 @@ function Upload(file, options) {
         }
         if (properties.debug)
             console.log('upload.reappend: ' + properties.retry.count);
-        setTimeout(function() {
-            methods.request('size', null, {
-                'done': function(responce) {
-                    properties.offset = responce.size;
-                    properties.retry.count = 0;
-                    methods.append();
-                },
-                'fail': function() {
-                    methods.reappend();
-                }
-            })
-        }, properties.retry.interval);
+            setTimeout(function() {
+                methods.request('size', null, {
+                    'done': function(responce) {
+                        properties.offset = responce.size;
+                        properties.retry.count = 0;
+                        methods.append();
+                    },
+                    'fail': function() {
+                        methods.reappend();
+                    }
+                })
+            }, properties.retry.interval);
     };
     methods.close = function() {
         methods.request('close', {time: file.lastModified}, {
