@@ -8,34 +8,36 @@
  */
 
 $(document).ready(function() {
-    const limit = 100 * 1048576, interval = {status: 1000, size: 100};
+    const limit = 100 * 1048576, interval = {status: 1000, size: 200};
     let file, upload, timer = {status: {}, size: null};
-    let nodes = new function() {
-        this.main = $('main');
-        this.alert = this.main.find('div.alert');
-        this.card = this.main.find('div.card');
-        this.form = this.card.find('div.card-body form');
-        this.fileForm = this.form.find('div.file');
-        this.progressForm = this.form.find('div.progress');
-        this.controlForm = this.form.find('div.control');
-        this.statusForm = this.form.find('div.status');
-        this.progressBar = this.progressForm.find('div.progress-bar');
-        this.fileButton = this.fileForm.find('input');
-        this.uploadButton = this.controlForm.find('input.upload');
-        this.pauseButton = this.controlForm.find('input.pause');
-        this.resumeButton = this.controlForm.find('input.resume');
-        this.cancelButton = this.controlForm.find('input.cancel');
-        this.sizeIndicator = this.fileForm.find('span');
-        this.speedIndicator = this.statusForm.find('span.speed');
-        this.timeIndicator = this.statusForm.find('span.time');
-    };
+    let nodes = new function() {return null};
+    nodes.main = $('main');
+    nodes.alert = nodes.main.find('div.alert');
+    nodes.card = nodes.main.find('div.card');
+    nodes.form = nodes.card.find('div.card-body form');
+    nodes.form = new function() {return nodes.card.find('div.card-body form');};
+    nodes.form.file = nodes.form.find('div.file');
+    nodes.form.progress = nodes.form.find('div.progress');
+    nodes.form.control = nodes.form.find('div.control');
+    nodes.form.status = nodes.form.find('div.status');
+    nodes.buttons = new function() {return null};
+    nodes.buttons.file = nodes.form.file.find('input');
+    nodes.buttons.upload = nodes.form.control.find('input.upload');
+    nodes.buttons.pause = nodes.form.control.find('input.pause');
+    nodes.buttons.resume = nodes.form.control.find('input.resume');
+    nodes.buttons.cancel = nodes.form.control.find('input.cancel');
+    nodes.indicators = new function() {return null};
+    nodes.indicators.size = nodes.form.file.find('span');
+    nodes.indicators.speed = nodes.form.status.find('span.speed');
+    nodes.indicators.time = nodes.form.status.find('span.time');
+    nodes.indicators.progress = nodes.form.progress.find('div.progress-bar');
+
 
     nodes.alert.toggle().click(function(){$(this).hide();});
     nodes.card.show();
 
-    nodes.fileButton.change(function() {
-        console.log('nodes.fileButton.change');
-        console.log($(this)[0].files[0]);
+    nodes.buttons.file.change(function() {
+        //console.log($(this)[0].files[0]);
         file = $(this)[0].files[0];
         if (file === undefined) return false;
         if (file.size > limit) {
@@ -44,79 +46,76 @@ $(document).ready(function() {
             file = null;
             return;
         }
-        nodes.uploadButton.enable();
-        nodes.sizeIndicator.text('('+Human.size(file.size)+')');
-        nodes.speedIndicator.text(null);
-        nodes.timeIndicator.text(null);
-        nodes.progressBar.css('width', 0).text(null);
-        upload = new Upload(file, {timeout: 3000, retry: {interval: 3000, limit: 5}});
-        upload.addListener('done', function() {
-            nodes.fileButton.enable();
-            nodes.pauseButton.disable();
-            nodes.resumeButton.disable();
-            nodes.cancelButton.disable();
-            clearIntervalAll();
-        });
-        upload.addListener('fail', function () {
-            nodes.fileButton.enable();
-            nodes.uploadButton.disable();
-            nodes.pauseButton.disable();
-            nodes.resumeButton.disable();
-            nodes.cancelButton.disable();
-            clearIntervalAll();
-            nodes.alert.text('Помилка! ' + upload.getError()).visibility('visible');
-        });
-        console.log(upload);
+        nodes.buttons.upload.enable();
+        nodes.indicators.size.text('(' + Human.size(file.size) + ')');
+        nodes.indicators.speed.text(null);
+        nodes.indicators.time.text(null);
+        nodes.indicators.progress.css('width', 0).text(null);
     });
 
-    nodes.uploadButton.click(function() {
-        console.log('nodes.uploadButton.click');
-        nodes.pauseButton.enable();
-        nodes.cancelButton.enable();
-        nodes.fileButton.disable();
-        nodes.uploadButton.disable();
-        timer.status = setInterval(function(){
+    nodes.buttons.upload.click(function() {
+        nodes.buttons.pause.enable();
+        nodes.buttons.cancel.enable();
+        nodes.buttons.file.disable();
+        nodes.buttons.upload.disable();
+        upload = new Upload(file,
+            {timeout: 3000, retry: {interval: 3000, limit: 5}},
+            {
+                'done': function() {
+                    nodes.buttons.file.enable();
+                    nodes.buttons.pause.disable();
+                    nodes.buttons.resume.disable();
+                    nodes.buttons.cancel.disable();
+                    clearIntervalAll();},
+                'fail': function () {
+                    nodes.buttons.file.enable();
+                    nodes.buttons.upload.disable();
+                    nodes.buttons.pause.disable();
+                    nodes.buttons.resume.disable();
+                    nodes.buttons.cancel.disable();
+                    clearIntervalAll();
+                    nodes.alert.text('Помилка! ' + upload.getError()).show();
+                }
+            });
+        timer.status = setInterval(function() {
             let status = upload.getStatus();
-            nodes.speedIndicator.text(
+            nodes.indicators.speed.text(
                 Human.size(status.speed) + '/c' + ' (' + Human.size(status.chunk) + ')'
             );
-            nodes.timeIndicator.text(
+            nodes.indicators.time.text(
                 Human.time(status.timeElapsed) + ' / ' + Human.time(status.timeEstimate)
             );
         }, interval.status);
-        timer.size = setInterval(function(){
+        timer.size = setInterval(function() {
             let size = upload.getSize();
             let percent = Math.round(size * 100 / file.size);
-            nodes.progressBar.css('width',  percent + '%')
+            nodes.indicators.progress.css('width',  percent + '%')
                 .text(Human.size(size) + ' (' + percent + '%)');
         }, interval.size);
         upload.start();
     });
 
-    nodes.pauseButton.click(function() {
-        console.log('nodes.pauseButton.click');
-        nodes.resumeButton.enable();
-        nodes.pauseButton.disable();
+    nodes.buttons.pause.click(function() {
+        nodes.buttons.resume.enable();
+        nodes.buttons.pause.disable();
         upload.pause();
     });
 
-    nodes.resumeButton.click(function() {
-        console.log('nodes.resumeButton.click');
-        nodes.pauseButton.enable();
-        nodes.resumeButton.disable();
+    nodes.buttons.resume.click(function() {
+        nodes.buttons.pause.enable();
+        nodes.buttons.resume.disable();
         upload.resume();
     });
 
-    nodes.cancelButton.click(function() {
-        console.log('nodes.cancelButton.click');
+    nodes.buttons.cancel.click(function() {
         nodes.form[0].reset();
         clearIntervalAll();
-        nodes.fileButton.enable();
-        nodes.uploadButton.disable();
-        nodes.pauseButton.disable();
-        nodes.resumeButton.disable();
-        nodes.cancelButton.disable();
-        upload.cancel();
+        nodes.buttons.file.enable();
+        nodes.buttons.upload.disable();
+        nodes.buttons.pause.disable();
+        nodes.buttons.resume.disable();
+        nodes.buttons.cancel.disable();
+        upload.stop();
     });
 
     function clearIntervalAll() {

@@ -7,14 +7,15 @@
  * @copyright   Всі права застережено (c) 2019 Upload
  */
 
-function Upload(file, options) {
+function Upload(file, options, callbacks) {
+    let self = {};
     let parent = this;
+    self.callbacks = this.callbacks;
     let properties = {
         hash: null, length: 1024, offset: 0, size: 0, iteration: 1,
         time: null, speed: 0, pause: false, stop: false, timeout: 30000,
         retry: {count: 0, limit: 5, interval: 5000}, debug: false, error: null
     };
-    let callbacks = {done: null, fail: null};
     let methods = {};
     this.setError = function(error) {
         properties.error = error;
@@ -36,20 +37,13 @@ function Upload(file, options) {
         }
         return status;
     };
-    this.addListener = function(handler, callback) {
-        if (typeof callbacks[handler] === undefined) {
-            this.setError('Невідомий метод зворотнього виклику ' + handler);
-            return false;
-        }
-        callbacks[handler] = callback;
-    };
     this.start = function() {methods.open();};
     this.pause = function() {properties.pause = true;};
     this.resume = function() {
         properties.pause = false;
         methods.append();
     };
-    this.cancel = function() {
+    this.stop = function() {
         if (properties.pause !== false) {
             methods.remove();
         } else {
