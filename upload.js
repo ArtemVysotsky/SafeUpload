@@ -12,6 +12,7 @@ function Upload(file, options, callbacks) {
     let parent = this;
     self.callbacks = this.callbacks;
     let properties = {
+        url: 'http://upload2.local/api.php?action=',
         hash: null, length: 1024, offset: 0, size: 0, iteration: 1,
         time: null, speed: 0, pause: false, stop: false, timeout: 30000,
         retry: {count: 0, limit: 5, interval: 5000}, debug: false, error: null
@@ -144,7 +145,6 @@ function Upload(file, options, callbacks) {
                 properties.speed = (new Date().getTime() / 1000) - properties.time;
                 properties.speed = Math.round(properties.size / properties.speed);
                 if (!!callbacks.done) callbacks.done();
-                if (!!callbacks.finish) callbacks.finish();
             },
             'fail': function() {
                 if (properties.retry.count > properties.retry.limit) {
@@ -171,18 +171,12 @@ function Upload(file, options, callbacks) {
     };
     methods.request = function(action, data, callbacks) {
         let params = {
-            method: 'POST', url:'/api.php?action=' + action, data: {},
+            method: 'POST', url:properties.url + action, data: {},
             text: 'text', dataType: 'json', cache: false, timeout: properties.timeout};
-        let debug = {iteration: properties.iteration, action: action};
         if (!!data) params.data = data;
         params.data.name = file.name;
         if (!!properties.hash) params.data.hash = properties.hash;
         if (params.data.chunk !== undefined) {
-            let status = parent.getStatus();
-            debug.speed = status.speed;
-            debug.size = params.data.chunk.size;
-            debug.offset = properties.offset;
-            debug.time = status.timeElapsed;
             let formData = new FormData();
             formData.append('name', params.data.name);
             formData.append('hash', params.data.hash);
@@ -191,13 +185,32 @@ function Upload(file, options, callbacks) {
             params.processData = false;
             params.contentType = false;
         }
-        if (properties.debug) console.log(debug);
-        $.ajax(params)
+        console.log(params);
+        let xhr = $.ajax(params)
         .done(function(responce) {
+            console.log(responce);
+            properties.retry.count = 0;
             if (!!callbacks && !!callbacks.done) callbacks.done(responce);
         })
         .fail(function(jqXHR) {
-            if (!!callbacks && !!callbacks.fail) callbacks.fail(jqXHR);
+            console.log('request.fail');
+            console.log(jqXHR);
+            properties.retry.count ++;
+            console.log(properties.retry);
+            if ((jqXHR.readyState === 0) || ['502', '503', '504'].includes(status)) {
+                if (properties.retry.count <= properties.retry.limit) {
+                    methods.request(action, data, callbacks);
+                    return false;
+                }
+                parent.setError('Неможливо виконати запит "' + action + '" (' + jqXHR.statusText + ')');
+            } else {
+                if ((status === 500) && !!jqXHR.exception) {
+                    parent.setError(jqXHR.exception);
+                } else {
+                    parent.setError(jqXHR.responseText);
+                }
+            }
+            //if (!!callbacks && !!callbacks.fail) callbacks.fail(jqXHR);
         });
     };
     if (options !== undefined) {

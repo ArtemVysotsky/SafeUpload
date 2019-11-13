@@ -37,20 +37,21 @@ $(document).ready(function() {
     nodes.card.show();
 
     nodes.buttons.file.change(function() {
-        //console.log($(this)[0].files[0]);
+        nodes.indicators.size.text(null);
+        nodes.indicators.speed.text(null);
+        nodes.indicators.time.text(null);
+        nodes.indicators.progress.css('width', 0).text(null);
         file = $(this)[0].files[0];
         if (file === undefined) return false;
         if (file.size > limit) {
             nodes.alert.text('Розмір файлу більше допустимого').show();
             nodes.form[0].reset();
+            nodes.buttons.upload.disable();
             file = null;
-            return;
+            return false;
         }
         nodes.buttons.upload.enable();
         nodes.indicators.size.text('(' + Human.size(file.size) + ')');
-        nodes.indicators.speed.text(null);
-        nodes.indicators.time.text(null);
-        nodes.indicators.progress.css('width', 0).text(null);
     });
 
     nodes.buttons.upload.click(function() {
