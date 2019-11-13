@@ -7,24 +7,52 @@
  * @copyright   Всі права застережено (c) 2019 Upload
  */
 
-function Upload(file, options, callbacks) {
-    let self = {};
-    let parent = this;
-    self.callbacks = this.callbacks;
-    let properties = {
-        url: 'http://upload2.local/api.php?action=',
-        hash: null, length: 1024, offset: 0, size: 0, iteration: 1,
-        time: null, speed: 0, pause: false, stop: false, timeout: 30000,
-        retry: {count: 0, limit: 5, interval: 5000}, debug: false, error: null
+class Upload {
+    #file; // об'єкт файла форми (Files[0])
+    #url = '/api.php?action='; // адреса API для завантаження файла
+    #hash; // тичасовий хеш файлу на час завантаження
+    #length = 1024; // початкова довжина фрагмента файла, байти (chunk size)
+    #offset = 0; // зміщення курсора читання файла
+    #size = 0; // розмір завантаженої фрагмента файла
+    #iteration = 1; // порядковий номер циклу завантаження фрагмента файла
+    #time; // час початку завантаження
+    #speed = 0; // швидкість завантаження останнього фрагмента файла
+    #isPause = false; // ознака призупинки процесу завантаження файла
+    #isStop = false; // ознака зупинки процесу завантаження файла
+    #timeout = 30; // максимальний дозволений час тривалості запитсу, секунди
+    #retry = { // дані повторного запиту (номер циклу, дозволена кількість,
+        iteration: 0, // поточний номер ітерації повторного запиту
+        limit: 5, // максимальна дозволена кількість повторних запитів
+        interval: 5}; // тривалість паузи між повторними запитами
+    #callbacks = { // функції зворотнього виклику
+        done: function(){return true;}, // функція що виконується в разі успішного завантаження
+        fail: function(){return true;}}; // функція що виконується в разі невдалого завантаження
+    #error; // текст помилки (при наявності)
+
+
+    constructor(file, options = null, callbacks = null) {
+        this.#setError();
+        this.#file = file;
+        if (options !== null) {
+            if (options.timeout !== undefined)
+                this.#timeout = options.timeout;
+            if (options.retry !== undefined) {
+                if (options.retry.limit !== undefined)
+                    this.#retry.limit = options.retry.limit;
+                if (options.retry.interval !== undefined)
+                    this.#retry.interval = options.retry.interval;
+            }
+        }
+        if (callbacks !== null) this.#callbacks = callbacks;
+    }
+    #setError = (error) => {
+        this.#error = error;
+        this.#callbacks.fail();
     };
-    let methods = {};
-    this.setError = function(error) {
-        properties.error = error;
-        if (!!callbacks.fail) callbacks.fail();
-    };
-    this.getError = function() {return properties.error;};
-    this.getSize = function() {return properties.size;};
-    this.getStatus = function() {
+    getError() {return this.#error;}
+/*
+    #getSize() {return properties.size;}
+    getStatus() {
         let status = {};
         status.chunk = properties.length;
         status.speed = properties.speed;
@@ -37,21 +65,21 @@ function Upload(file, options, callbacks) {
             status.timeEstimate = 0;
         }
         return status;
-    };
-    this.start = function() {methods.open();};
-    this.pause = function() {properties.pause = true;};
-    this.resume = function() {
+    }
+    start() {methods.open();}
+    pause() {properties.pause = true;}
+    resume() {
         properties.pause = false;
         methods.append();
-    };
-    this.stop = function() {
+    }
+    stop() {
         if (properties.pause !== false) {
             methods.remove();
         } else {
             properties.stop = true;
         }
-    };
-    methods.open = function() {
+    }
+    #open() {
         methods.request('open', {}, {
             'done': function(responce){
                 properties.hash = responce.hash;
@@ -67,8 +95,8 @@ function Upload(file, options, callbacks) {
                 methods.open();
             }
         });
-    };
-    methods.append = function(){
+    }
+    #append() {
         if (properties.pause !== false) {
             properties.speed = 0;
             return;
@@ -101,7 +129,6 @@ function Upload(file, options, callbacks) {
                 if (!!callbacks.iteration) callbacks.iteration();
             },
             'fail': function(jqXHR) {
-                /** @namespace jqXHR.responseJSON **/
                 properties.speed = 0;
                 if (jqXHR.status === 500) {
                     if (jqXHR.responseJSON.exception !== undefined) {
@@ -114,8 +141,8 @@ function Upload(file, options, callbacks) {
                 methods.reappend();
             }
         });
-    };
-    methods.reappend = function() {
+    }
+    #reappend() {
         properties.retry.count ++;
         if (properties.retry.count > properties.retry.limit) {
             parent.setError('При завантажені файлу на сервер виникла помилка');
@@ -136,8 +163,8 @@ function Upload(file, options, callbacks) {
                     }
                 })
             }, properties.retry.interval);
-    };
-    methods.close = function() {
+    }
+    #close() {
         methods.request('close', {time: file.lastModified}, {
             'done': function(responce){
                 if (responce.size !== file.size)
@@ -156,8 +183,8 @@ function Upload(file, options, callbacks) {
                 methods.close();
             }
         });
-    };
-    methods.remove = function() {
+    }
+    #remove() {
         methods.request('remove', null, {
             'fail': function() {
                 if (properties.retry.count > properties.retry.limit) {
@@ -168,8 +195,8 @@ function Upload(file, options, callbacks) {
                 methods.remove();
             }
         });
-    };
-    methods.request = function(action, data, callbacks) {
+    }
+    #request(action, data, callbacks) {
         let params = {
             method: 'POST', url:properties.url + action, data: {},
             text: 'text', dataType: 'json', cache: false, timeout: properties.timeout};
@@ -212,17 +239,6 @@ function Upload(file, options, callbacks) {
             }
             //if (!!callbacks && !!callbacks.fail) callbacks.fail(jqXHR);
         });
-    };
-    if (options !== undefined) {
-        if (options.timeout !== undefined)
-            properties.timeout = options.timeout;
-        if (options.retry.limit !== undefined)
-            properties.retry.limit = options.retry.limit;
-        if (options.retry.interval !== undefined)
-            properties.retry.interval = options.retry.interval;
-        if (options.debug !== undefined)
-            properties.debug = options.debug;
     }
-    if (properties.debug) console.log(file);
-    if (properties.debug) console.log(properties);
+*/
 }

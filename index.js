@@ -6,7 +6,7 @@
  * @link        http://upload.local
  * @copyright   Всі права застережено (c) 2019 Upload
  */
-
+let u = new Upload('file', 'options');
 $(document).ready(function() {
     const limit = 100 * 1048576, interval = {status: 1000, size: 200};
     let file, upload, timer = {status: {}, size: null};
