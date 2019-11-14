@@ -6,6 +6,11 @@
  * @link        http://upload.local
  * @copyright   Всі права застережено (c) 2019 Upload
  */
+'use strict';
+/**
+ * @typedef {object} jqXHR
+ * @property {object} responseJSON
+ */
 
 class Upload {
     #file; // об'єкт файла форми (Files[0])
@@ -17,21 +22,20 @@ class Upload {
     #iteration = 1; // порядковий номер циклу завантаження фрагмента файла
     #time; // час початку завантаження
     #speed = 0; // швидкість завантаження останнього фрагмента файла
-    #isPause = false; // ознака призупинки процесу завантаження файла
-    #isStop = false; // ознака зупинки процесу завантаження файла
+    #pause; // зберігає функцію, яка виконується після призупинки процесу завантаження файла
+    #stop; // зберігає функції, які використовуються при зупинці процесу завантаження файла
     #timeout = 30; // максимальний дозволений час тривалості запитсу, секунди
     #retry = { // дані повторного запиту (номер циклу, дозволена кількість,
         iteration: 0, // поточний номер ітерації повторного запиту
         limit: 5, // максимальна дозволена кількість повторних запитів
-        interval: 5}; // тривалість паузи між повторними запитами
-    #callbacks = { // функції зворотнього виклику
-        done: function(){return true;}, // функція що виконується в разі успішного завантаження
-        fail: function(){return true;}}; // функція що виконується в разі невдалого завантаження
+        interval: 5}; // тривалість паузи між повторними запитами, секунди
     #error; // текст помилки (при наявності)
+    #callbacks = {}; // функції зворотнього виклику, які виконуються в залежності від результату
 
 
-    constructor(file, options = null, callbacks = null) {
-        this.#setError();
+
+    constructor(file, options = null) {
+        //this.#setError();
         this.#file = file;
         if (options !== null) {
             if (options.timeout !== undefined)
@@ -43,166 +47,152 @@ class Upload {
                     this.#retry.interval = options.retry.interval;
             }
         }
-        if (callbacks !== null) this.#callbacks = callbacks;
     }
-    #setError = (error) => {
-        this.#error = error;
-        this.#callbacks.fail();
-    };
-    getError() {return this.#error;}
-/*
-    #getSize() {return properties.size;}
+    getSize() {return this.#size;}
     getStatus() {
         let status = {};
-        status.chunk = properties.length;
-        status.speed = properties.speed;
-        status.time = new Date().getTime() / 1000;
-        status.timeElapsed = Math.round(status.time - properties.time);
-        if (properties.speed > 0) {
-            status.timeEstimate = file.size / (properties.size / status.timeElapsed);
-            status.timeEstimate = Math.round(status.timeEstimate - status.timeElapsed);
+        status.chunk = this.#length;
+        status.speed = this.#speed;
+        status.time = {};
+        status.time.elapsed = Math.round((new Date().getTime() / 1000) - this.#time);
+        if (this.#speed > 0) {
+            status.time.estimate = this.#file.size / (this.#size / this.#time.elapsed);
+            status.time.estimate = Math.round(status.time.estimate - status.time.elapsed);
         } else {
-            status.timeEstimate = 0;
+            status.time.estimate = 0;
         }
         return status;
     }
-    start() {methods.open();}
-    pause() {properties.pause = true;}
-    resume() {
-        properties.pause = false;
-        methods.append();
+    #setError = (error) => {
+        this.#error = error;
+        if (this.#callbacks.error !== undefined) this.#callbacks.error();
+    };
+    getError() {return this.#error;}
+    start(callbacks = {}) {this.#open(callbacks);}
+    pause(callback = {}) {this.#pause = callback;}
+    resume(callbacks = {}) {
+        this.#pause = null;
+        this.#append(callbacks);
     }
-    stop() {
-        if (properties.pause !== false) {
-            methods.remove();
+    stop(callbacks = {}) {
+        if (this.#pause !== null) {
+            this.#remove(callbacks);
         } else {
-            properties.stop = true;
+            this.#stop = callbacks;
         }
     }
-    #open() {
-        methods.request('open', {}, {
-            'done': function(responce){
-                properties.hash = responce.hash;
-                properties.time = new Date().getTime() / 1000;
-                methods.append();
+
+    #open = (callbacks = {}) => {
+        this.#request('open', {}, {
+            done: (response) => {
+                this.#hash = response.hash;
+                this.#time = new Date().getTime() / 1000;
+                this.#append(callbacks);
+                if (callbacks.done !== undefined) callbacks.done();
             },
-            'fail': function() {
-                if (properties.retry.count > properties.retry.limit) {
-                    parent.setError('При створенні файлу на сервері виникла помилка');
-                    return;
-                }
-                properties.retry.count ++;
-                methods.open();
+            fail: () => {
+                if (callbacks.fail !== undefined) callbacks.fail();
+            },
+            always: () => {
+                if (callbacks.always !== undefined) callbacks.always();
             }
         });
-    }
-    #append() {
-        if (properties.pause !== false) {
-            properties.speed = 0;
+    };
+
+    #append = (callbacks = {}) => {
+        if (this.#pause !== null) {
+            this.#speed = 0;
+            if (this.#pause !== undefined) this.#pause();
             return;
         }
-        if (properties.stop !== false) {
-            methods.remove();
+        if (this.#stop !== null) {
+            this.#remove(this.#stop);
             return;
         }
         let timestamp = new Date().getTime();
-        let end = properties.offset + properties.length;
-        let chunk = file.slice(properties.offset, end);
-        methods.request('append', {chunk: chunk}, {
-            'done': function(responce) {
-                let speed = (new Date().getTime() - timestamp) / 1000;
-                speed = Math.round((responce.size - properties.size) / speed);
-                if (speed > properties.speed) {
-                    if (properties.length < 104576) properties.length += 1024;
+        let end = this.#offset + this.#length;
+        let chunk = this.#file.slice(this.#offset, end);
+        this.#request('append', {chunk: chunk}, {
+            done: (response) => {
+                let interval = (new Date().getTime() - timestamp) / 1000;
+                let speed = Math.round((response.size - this.#size) / interval);
+                if (speed > this.#speed) {
+                    if (this.#length < 104576) this.#length += 1024;
                 } else {
-                    if (properties.length > 1024) properties.length -= 1024;
+                    if (this.#length > 1024) this.#length -= 1024;
                 }
-                properties.speed = speed;
-                properties.size = responce.size;
-                if (properties.size < file.size) {
-                    properties.offset = end;
-                    methods.append();
+                this.#speed = speed;
+                this.#size = response.size;
+                if (this.#size < this.#file.size) {
+                    this.#offset = end;
+                    this.#append();
                 } else {
-                    methods.close();
+                    this.#close();
                 }
-                properties.iteration ++;
-                if (!!callbacks.iteration) callbacks.iteration();
+                this.#iteration ++;
+                if (callbacks.done !== undefined) callbacks.done();
             },
-            'fail': function(jqXHR) {
-                properties.speed = 0;
-                if (jqXHR.status === 500) {
-                    if (jqXHR.responseJSON.exception !== undefined) {
-                        parent.setError(jqXHR.responseJSON.exception);
-                    } else {
-                        parent.setError('При завантажені файлу на сервер виникла невідома помилка');
-                    }
-                    return;
-                }
-                methods.reappend();
+            fail: () => {
+                if (callbacks.fail !== undefined) callbacks.fail();
+            },
+            always: () => {
+                if (callbacks.always !== undefined) callbacks.always();
             }
         });
-    }
-    #reappend() {
-        properties.retry.count ++;
-        if (properties.retry.count > properties.retry.limit) {
-            parent.setError('При завантажені файлу на сервер виникла помилка');
-            methods.remove();
+    };
+/*
+    #reAppend = () => {
+        this.#retry.iteration ++;
+        if (this.#retry.iteration > this.#retry.limit) {
+            this.#setError('При завантажені файлу на сервер виникла помилка');
+            this.#remove();
             return;
         }
-        if (properties.debug)
-            console.log('upload.reappend: ' + properties.retry.count);
-            setTimeout(function() {
-                methods.request('size', null, {
-                    'done': function(responce) {
-                        properties.offset = responce.size;
-                        properties.retry.count = 0;
-                        methods.append();
-                    },
-                    'fail': function() {
-                        methods.reappend();
-                    }
-                })
-            }, properties.retry.interval);
-    }
-    #close() {
-        methods.request('close', {time: file.lastModified}, {
-            'done': function(responce){
-                if (responce.size !== file.size)
-                    parent.setError('Неправельний розмір завантаженого файлу');
-                properties.speed = (new Date().getTime() / 1000) - properties.time;
-                properties.speed = Math.round(properties.size / properties.speed);
-                if (!!callbacks.done) callbacks.done();
+        setTimeout(() => {
+            this.#request('size', null, {
+                'done': (responce) => {
+                    this.#offset = responce.size;
+                    this.#retry.iteration = 0;
+                    this.#append();
+                },
+                'fail': () => {
+                    this.#reAppend();
+                }
+            })
+        }, this.#retry.interval * 1000);
+    };
+*/
+    #close = (callbacks = {}) => {
+        this.#request('close', {time: this.#file.lastModified}, {
+            done: (response) => {
+                if (response.size !== this.#file.size)
+                    this.#setError('Неправельний розмір завантаженого файлу');
+                this.#speed = (new Date().getTime() / 1000) - this.#time;
+                this.#speed = Math.round(this.#size / this.#speed);
+                if (callbacks.done !== undefined) callbacks.done();
+                if (this.#callbacks.done !== undefined) this.#callbacks.done();
             },
-            'fail': function() {
-                if (properties.retry.count > properties.retry.limit) {
-                    methods.remove();
-                    parent.setError('При переміщенні файла на сервері виникла помилка');
-                    return;
-                }
-                properties.retry.count ++;
-                methods.close();
+            fail: () => {
+                if (callbacks.fail !== undefined) callbacks.fail();
+            },
+            always: () => {
+                if (callbacks.always !== undefined) callbacks.always();
+                if (this.#callbacks.always !== undefined) this.#callbacks.always();
             }
         });
-    }
-    #remove() {
-        methods.request('remove', null, {
-            'fail': function() {
-                if (properties.retry.count > properties.retry.limit) {
-                    parent.setError('При видаленні файлу з сервера виникла помилка');
-                    return;
-                }
-                properties.retry.count ++;
-                methods.remove();
-            }
-        });
-    }
-    #request(action, data, callbacks) {
+    };
+
+    #remove = (callbacks = {}) => {
+        this.#request('remove', null, callbacks);
+    };
+
+    #request = (action, data = {}, callbacks = {}) => {
         let params = {
-            method: 'POST', url:properties.url + action, data: {},
-            text: 'text', dataType: 'json', cache: false, timeout: properties.timeout};
-        if (!!data) params.data = data;
-        params.data.name = file.name;
-        if (!!properties.hash) params.data.hash = properties.hash;
+            method: 'POST', url:this.#url + action, data: {},
+            text: 'text', dataType: 'json', cache: false, timeout: this.#timeout * 1000};
+        params.data = data;
+        params.data.name = this.#file.name;
+        if (this.#hash !== null) params.data.hash = this.#hash;
         if (params.data.chunk !== undefined) {
             let formData = new FormData();
             formData.append('name', params.data.name);
@@ -212,33 +202,47 @@ class Upload {
             params.processData = false;
             params.contentType = false;
         }
-        console.log(params);
-        let xhr = $.ajax(params)
-        .done(function(responce) {
-            console.log(responce);
-            properties.retry.count = 0;
-            if (!!callbacks && !!callbacks.done) callbacks.done(responce);
-        })
-        .fail(function(jqXHR) {
-            console.log('request.fail');
-            console.log(jqXHR);
-            properties.retry.count ++;
-            console.log(properties.retry);
-            if ((jqXHR.readyState === 0) || ['502', '503', '504'].includes(status)) {
-                if (properties.retry.count <= properties.retry.limit) {
-                    methods.request(action, data, callbacks);
-                    return false;
-                }
-                parent.setError('Неможливо виконати запит "' + action + '" (' + jqXHR.statusText + ')');
+        $.ajax(params)
+        .done((response) => {
+            //console.log(response);
+            this.#retry.iteration = 0;
+            if (response.exception !== undefined) {
+                this.#setError(jqXHR.exception);
             } else {
-                if ((status === 500) && !!jqXHR.exception) {
-                    parent.setError(jqXHR.exception);
-                } else {
-                    parent.setError(jqXHR.responseText);
-                }
+                if (callbacks.done !== undefined) callbacks.done(response);
             }
-            //if (!!callbacks && !!callbacks.fail) callbacks.fail(jqXHR);
+        })
+        .fail((jqXHR) => {
+            if (jqXHR.readyState === 4) {
+                this.#setError('Неможливо виконати запит "' + action + '" (' + jqXHR.statusText + ')');
+                //this.#setError(jqXHR.responseText);
+                if (callbacks.fail !== undefined) callbacks.fail(jqXHR);
+                return;
+            }
+            this.#retry.iteration ++;
+            if (this.#retry.iteration > this.#retry.limit) {
+                let error = 'При завантажені файлу на сервер виникла помилка';
+                this.#remove({
+                    done: () => {this.#setError(error + ' (файл видалено)')},
+                    fail: () => {this.#setError(error + ' (не можу видалити файл)')},
+                    always: () => {if (callbacks.fail !== undefined) callbacks.fail(jqXHR)}
+                });
+                return;
+            }
+            setTimeout(() => {
+                this.#request('size', null, {
+                    'done': (response) => {
+                        if (callbacks.done !== undefined) callbacks.done(response);
+                    },
+                    'fail': (jqXHR) => {
+                        if (callbacks.fail !== undefined) callbacks.fail(jqXHR);
+                    },
+                    'always': (response) => {
+                        if (callbacks.always !== undefined) callbacks.always(response);
+                    }
+                })
+            }, this.#retry.interval * 1000);
         });
     }
-*/
+
 }

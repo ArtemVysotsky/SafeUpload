@@ -6,6 +6,7 @@
  * @link        http://upload.local
  * @copyright   Всі права застережено (c) 2019 Upload
  */
+'use strict';
 let u = new Upload('file', 'options');
 $(document).ready(function() {
     const limit = 100 * 1048576, interval = {status: 1000, size: 200};
@@ -59,32 +60,27 @@ $(document).ready(function() {
         nodes.buttons.cancel.enable();
         nodes.buttons.file.disable();
         nodes.buttons.upload.disable();
-        upload = new Upload(file,
-            {timeout: 3000, retry: {interval: 3000, limit: 5}},
-            {
-                'done': function() {
-                    nodes.buttons.file.enable();
-                    nodes.buttons.pause.disable();
-                    nodes.buttons.resume.disable();
-                    nodes.buttons.cancel.disable();
-                    clearIntervalAll();},
-                'fail': function () {
-                    nodes.buttons.file.enable();
-                    nodes.buttons.upload.disable();
-                    nodes.buttons.pause.disable();
-                    nodes.buttons.resume.disable();
-                    nodes.buttons.cancel.disable();
-                    clearIntervalAll();
-                    nodes.alert.text('Помилка! ' + upload.getError()).show();
-                }
-            });
+        upload = new Upload(file,{timeout: 3000, retry: {interval: 3000, limit: 5}}, {
+            done: function() {},
+            fail: function () {
+                nodes.buttons.upload.disable();
+                nodes.alert.text('Помилка! ' + upload.getError()).show();},
+            always: function() {
+                nodes.buttons.file.enable();
+                nodes.buttons.pause.disable();
+                nodes.buttons.resume.disable();
+                nodes.buttons.cancel.disable();
+                clearInterval(timer.status);
+                clearInterval(timer.size);
+            }
+        });
         timer.status = setInterval(function() {
             let status = upload.getStatus();
             nodes.indicators.speed.text(
                 Human.size(status.speed) + '/c' + ' (' + Human.size(status.chunk) + ')'
             );
             nodes.indicators.time.text(
-                Human.time(status.timeElapsed) + ' / ' + Human.time(status.timeEstimate)
+                Human.time(status.time.elapsed) + ' / ' + Human.time(status.time.estimate)
             );
         }, interval.status);
         timer.size = setInterval(function() {
@@ -93,38 +89,48 @@ $(document).ready(function() {
             nodes.indicators.progress.css('width',  percent + '%')
                 .text(Human.size(size) + ' (' + percent + '%)');
         }, interval.size);
-        upload.start();
+        upload.start({
+            done: function() {},
+            fail: function () {
+                nodes.buttons.upload.disable();
+                nodes.alert.text('Помилка! ' + upload.getError()).show();},
+            always: function() {
+                nodes.buttons.file.enable();
+                nodes.buttons.pause.disable();
+                nodes.buttons.resume.disable();
+                nodes.buttons.cancel.disable();
+                clearInterval(timer.status);
+                clearInterval(timer.size);
+            }
+        });
     });
 
     nodes.buttons.pause.click(function() {
-        nodes.buttons.resume.enable();
-        nodes.buttons.pause.disable();
-        upload.pause();
+        upload.pause(function() {
+            nodes.buttons.resume.enable();
+            nodes.buttons.pause.disable();
+        });
     });
 
     nodes.buttons.resume.click(function() {
-        nodes.buttons.pause.enable();
-        nodes.buttons.resume.disable();
-        upload.resume();
+        upload.resume({done: function() {
+            nodes.buttons.pause.enable();
+            nodes.buttons.resume.disable();
+        }});
     });
 
     nodes.buttons.cancel.click(function() {
-        nodes.form[0].reset();
-        clearIntervalAll();
-        nodes.buttons.file.enable();
-        nodes.buttons.upload.disable();
-        nodes.buttons.pause.disable();
-        nodes.buttons.resume.disable();
-        nodes.buttons.cancel.disable();
-        upload.stop();
-    });
-
-    function clearIntervalAll() {
-        setTimeout(function(){
+        upload.stop({done: function() {
+            nodes.form[0].reset();
             clearInterval(timer.status);
             clearInterval(timer.size);
-        }, interval.status);
-    }
+            nodes.buttons.file.enable();
+            nodes.buttons.upload.disable();
+            nodes.buttons.pause.disable();
+            nodes.buttons.resume.disable();
+            nodes.buttons.cancel.disable();
+        }});
+    });
 
     jQuery.fn.enable = function() {return this.prop('disabled', false);};
     jQuery.fn.disable = function() {return this.prop('disabled', true);};
