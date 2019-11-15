@@ -22,8 +22,8 @@ class Upload {
     #iteration = 1; // порядковий номер циклу завантаження фрагмента файла
     #time; // час початку завантаження
     #speed = 0; // швидкість завантаження останнього фрагмента файла
-    #pause; // зберігає функцію, яка виконується після призупинки процесу завантаження файла
-    #stop; // зберігає функції, які використовуються при зупинці процесу завантаження файла
+    #pause = null; // зберігає функцію, яка виконується після призупинки процесу завантаження файла
+    #stop = null; // зберігає функції, які використовуються при зупинці процесу завантаження файла
     #timeout = 30; // максимальний дозволений час тривалості запитсу, секунди
     #retry = { // дані повторного запиту (номер циклу, дозволена кількість,
         iteration: 0, // поточний номер ітерації повторного запиту
@@ -34,8 +34,7 @@ class Upload {
 
 
 
-    constructor(file, options = null) {
-        //this.#setError();
+    constructor(file, options = null, callbacks = {}) {
         this.#file = file;
         if (options !== null) {
             if (options.timeout !== undefined)
@@ -47,6 +46,7 @@ class Upload {
                     this.#retry.interval = options.retry.interval;
             }
         }
+        this.#callbacks = callbacks;
     }
     getSize() {return this.#size;}
     getStatus() {
@@ -56,7 +56,7 @@ class Upload {
         status.time = {};
         status.time.elapsed = Math.round((new Date().getTime() / 1000) - this.#time);
         if (this.#speed > 0) {
-            status.time.estimate = this.#file.size / (this.#size / this.#time.elapsed);
+            status.time.estimate = this.#file.size / (this.#size / status.time.elapsed);
             status.time.estimate = Math.round(status.time.estimate - status.time.elapsed);
         } else {
             status.time.estimate = 0;
@@ -65,7 +65,7 @@ class Upload {
     }
     #setError = (error) => {
         this.#error = error;
-        if (this.#callbacks.error !== undefined) this.#callbacks.error();
+        callIfExists(this.#callbacks, 'error');
     };
     getError() {return this.#error;}
     start(callbacks = {}) {this.#open(callbacks);}
@@ -88,21 +88,17 @@ class Upload {
                 this.#hash = response.hash;
                 this.#time = new Date().getTime() / 1000;
                 this.#append(callbacks);
-                if (callbacks.done !== undefined) callbacks.done();
+                callbacks.callIfExists('done');
             },
-            fail: () => {
-                if (callbacks.fail !== undefined) callbacks.fail();
-            },
-            always: () => {
-                if (callbacks.always !== undefined) callbacks.always();
-            }
+            fail: () => {callbacks.callIfExists('fail')},
+            always: () => {callbacks.callIfExists('always')}
         });
     };
 
     #append = (callbacks = {}) => {
         if (this.#pause !== null) {
             this.#speed = 0;
-            if (this.#pause !== undefined) this.#pause();
+            this.#pause();
             return;
         }
         if (this.#stop !== null) {
@@ -130,38 +126,13 @@ class Upload {
                     this.#close();
                 }
                 this.#iteration ++;
-                if (callbacks.done !== undefined) callbacks.done();
+                callbacks.callIfExists('done');
             },
-            fail: () => {
-                if (callbacks.fail !== undefined) callbacks.fail();
-            },
-            always: () => {
-                if (callbacks.always !== undefined) callbacks.always();
-            }
+            fail: () => {callbacks.callIfExists('fail')},
+            always: () => {callbacks.callIfExists('always')}
         });
     };
-/*
-    #reAppend = () => {
-        this.#retry.iteration ++;
-        if (this.#retry.iteration > this.#retry.limit) {
-            this.#setError('При завантажені файлу на сервер виникла помилка');
-            this.#remove();
-            return;
-        }
-        setTimeout(() => {
-            this.#request('size', null, {
-                'done': (responce) => {
-                    this.#offset = responce.size;
-                    this.#retry.iteration = 0;
-                    this.#append();
-                },
-                'fail': () => {
-                    this.#reAppend();
-                }
-            })
-        }, this.#retry.interval * 1000);
-    };
-*/
+
     #close = (callbacks = {}) => {
         this.#request('close', {time: this.#file.lastModified}, {
             done: (response) => {
@@ -169,15 +140,13 @@ class Upload {
                     this.#setError('Неправельний розмір завантаженого файлу');
                 this.#speed = (new Date().getTime() / 1000) - this.#time;
                 this.#speed = Math.round(this.#size / this.#speed);
-                if (callbacks.done !== undefined) callbacks.done();
-                if (this.#callbacks.done !== undefined) this.#callbacks.done();
+                callbacks.callIfExists('done');
+                this.#callbacks.callIfExists('done');
             },
-            fail: () => {
-                if (callbacks.fail !== undefined) callbacks.fail();
-            },
+            fail: () => {callbacks.callIfExists('fail')},
             always: () => {
-                if (callbacks.always !== undefined) callbacks.always();
-                if (this.#callbacks.always !== undefined) this.#callbacks.always();
+                callbacks.callIfExists('always');
+                this.#callbacks.callIfExists('always');
             }
         });
     };
@@ -204,19 +173,18 @@ class Upload {
         }
         $.ajax(params)
         .done((response) => {
-            //console.log(response);
             this.#retry.iteration = 0;
             if (response.exception !== undefined) {
                 this.#setError(jqXHR.exception);
             } else {
-                if (callbacks.done !== undefined) callbacks.done(response);
+                callbacks.callIfExists('done', response);
             }
         })
         .fail((jqXHR) => {
             if (jqXHR.readyState === 4) {
                 this.#setError('Неможливо виконати запит "' + action + '" (' + jqXHR.statusText + ')');
                 //this.#setError(jqXHR.responseText);
-                if (callbacks.fail !== undefined) callbacks.fail(jqXHR);
+                callbacks.callIfExists('fail', jqXHR);
                 return;
             }
             this.#retry.iteration ++;
@@ -225,24 +193,18 @@ class Upload {
                 this.#remove({
                     done: () => {this.#setError(error + ' (файл видалено)')},
                     fail: () => {this.#setError(error + ' (не можу видалити файл)')},
-                    always: () => {if (callbacks.fail !== undefined) callbacks.fail(jqXHR)}
+                    always: () => {callbacks.callIfExists('fail', jqXHR)}
                 });
                 return;
             }
             setTimeout(() => {
                 this.#request('size', null, {
-                    'done': (response) => {
-                        if (callbacks.done !== undefined) callbacks.done(response);
-                    },
-                    'fail': (jqXHR) => {
-                        if (callbacks.fail !== undefined) callbacks.fail(jqXHR);
-                    },
-                    'always': (response) => {
-                        if (callbacks.always !== undefined) callbacks.always(response);
-                    }
+                    'done': (response) => {callbacks.callIfExists('done', response)},
+                    'fail': (jqXHR) => {callbacks.callIfExists('fail', jqXHR)},
+                    'always': (response) => {callbacks.callIfExists('always', response)}
                 })
             }, this.#retry.interval * 1000);
-        });
+        })
+        .always((response) => {callbacks.callIfExists('always', response)})
     }
-
 }
