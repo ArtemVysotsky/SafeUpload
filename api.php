@@ -7,10 +7,7 @@
  * @link        http://upload.local
  * @copyright   Всі права застережено (c) 2019 Upload
  */
-//header('HTTP/1.x 502 Bad Gateway');
-//header('HTTP/1.x 503 Service Unavailable');
-//header('HTTP/1.x 504 Gateway Timeout');
-//exit();
+
 set_error_handler('exceptionErrorHandler');
 
 $output = [];
@@ -35,7 +32,7 @@ try {
 
         case 'remove': $file->remove(); break;
 
-        case 'size': $output['size'] = $file->size(); break;
+        //case 'size': $output['size'] = $file->size(); break;
 
         default: throw new Exception('Невідома дія');
     }

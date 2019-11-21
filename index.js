@@ -7,44 +7,44 @@
  * @copyright   Всі права застережено (c) 2019 Upload
  */
 $(document).ready(function() {
-    const limit = 100 * 1048576, interval = {status: 1000, size: 200};
-    let file, upload, timer = {status: {}, size: null};
-    let nodes = new function() {return null};
-    nodes.main = $('main');
-    nodes.alert = nodes.main.find('div.alert');
-    nodes.card = nodes.main.find('div.card');
-    nodes.form = nodes.card.find('div.card-body form');
-    nodes.form = new function() {return nodes.card.find('div.card-body form');};
-    nodes.form.file = nodes.form.find('div.file');
-    nodes.form.progress = nodes.form.find('div.progress');
-    nodes.form.control = nodes.form.find('div.control');
-    nodes.form.status = nodes.form.find('div.status');
-    nodes.buttons = new function() {return null};
-    nodes.buttons.file = nodes.form.file.find('input');
-    nodes.buttons.upload = nodes.form.control.find('input.upload');
-    nodes.buttons.pause = nodes.form.control.find('input.pause');
-    nodes.buttons.resume = nodes.form.control.find('input.resume');
-    nodes.buttons.cancel = nodes.form.control.find('input.cancel');
-    nodes.indicators = new function() {return null};
-    nodes.indicators.size = nodes.form.file.find('span');
-    nodes.indicators.speed = nodes.form.status.find('span.speed');
-    nodes.indicators.time = nodes.form.status.find('span.time');
-    nodes.indicators.progress = nodes.form.progress.find('div.progress-bar');
 
+    const interval = {status: 1000, size: 200};
+    let file, upload, update, timer = {status: {}, size: null};
+    let nodes = {};
+    nodes.main = $('main');
+    nodes.alert = nodes.main.findFirst('div.alert');
+    nodes.card = nodes.main.findFirst('div.card');
+    nodes.form = {};
+    nodes.form.self = nodes.card.findFirst('div.card-body form');
+    nodes.form.file = nodes.form.self.findFirst('div.file');
+    nodes.form.progress = nodes.form.self.findFirst('div.progress');
+    nodes.form.control = nodes.form.self.findFirst('div.control');
+    nodes.form.status = nodes.form.self.findFirst('div.status');
+    nodes.buttons = {};
+    nodes.buttons.file = nodes.form.file.findFirst('input');
+    nodes.buttons.upload = nodes.form.control.findFirst('input.upload');
+    nodes.buttons.pause = nodes.form.control.findFirst('input.pause');
+    nodes.buttons.resume = nodes.form.control.findFirst('input.resume');
+    nodes.buttons.cancel = nodes.form.control.findFirst('input.cancel');
+    nodes.indicators = {};
+    nodes.indicators.size = nodes.form.file.findFirst('span');
+    nodes.indicators.speed = nodes.form.status.findFirst('span.speed');
+    nodes.indicators.time = nodes.form.status.findFirst('span.time');
+    nodes.indicators.progress = nodes.form.progress.findFirst('div.progress-bar');
 
     nodes.alert.toggle().click(function(){$(this).hide();});
     nodes.card.show();
 
     nodes.buttons.file.change(function() {
-        nodes.indicators.size.text(null);
-        nodes.indicators.speed.text(null);
-        nodes.indicators.time.text(null);
+        nodes.indicators.size.text('');
+        nodes.indicators.speed.text('');
+        nodes.indicators.time.text('');
         nodes.indicators.progress.css('width', 0).text(null);
         file = $(this)[0].files[0];
         if (file === undefined) return false;
-        if (file.size > limit) {
+        if (file.size > (10 * 1024 * 1024)) {
             nodes.alert.text('Розмір файлу більше допустимого').show();
-            nodes.form[0].reset();
+            nodes.form.self[0].reset();
             nodes.buttons.upload.disable();
             file = null;
             return false;
@@ -54,7 +54,8 @@ $(document).ready(function() {
     });
 
     nodes.buttons.upload.click(function() {
-        upload = new Upload(file,{timeout: 3000, retry: {interval: 3000, limit: 5}}, {
+        const options = {limit: 10 * 1024 * 1024, timeout: 3, retry: {interval: 3, limit: 5}};
+        upload = new Upload('/api.php', file, options, {
             done: function() {},
             fail: function () {
                 nodes.buttons.upload.disable();
@@ -68,21 +69,8 @@ $(document).ready(function() {
                 setTimeout(function () {clearInterval(timer.size)}, interval.size);
             }
         });
-        timer.status = setInterval(function() {
-            let status = upload.getStatus();
-            nodes.indicators.speed.text(
-                Human.size(status.speed) + '/c' + ' (' + Human.size(status.chunk) + ')'
-            );
-            nodes.indicators.time.text(
-                Human.time(status.time.elapsed) + ' / ' + Human.time(status.time.estimate)
-            );
-        }, interval.status);
-        timer.size = setInterval(function() {
-            let size = upload.getSize();
-            let percent = Math.round(size * 100 / file.size);
-            nodes.indicators.progress.css('width',  percent + '%')
-                .text(Human.size(size) + ' (' + percent + '%)');
-        }, interval.size);
+        timer.status = setInterval(update.status, interval.status);
+        timer.size = setInterval(update.size, interval.size);
         upload.start({
             done: function() {
                 nodes.buttons.file.disable();
@@ -100,6 +88,8 @@ $(document).ready(function() {
         upload.pause(function() {
             nodes.buttons.resume.enable();
             nodes.buttons.pause.disable();
+            setTimeout(function () {clearInterval(timer.status)}, interval.status);
+            setTimeout(function () {clearInterval(timer.size)}, interval.size);
         });
     });
 
@@ -107,12 +97,14 @@ $(document).ready(function() {
         upload.resume({done: function() {
             nodes.buttons.pause.enable();
             nodes.buttons.resume.disable();
+            timer.status = setInterval(update.status, interval.status);
+            timer.size = setInterval(update.size, interval.size);
         }});
     });
 
     nodes.buttons.cancel.click(function() {
         upload.stop({done: function() {
-            nodes.form[0].reset();
+            //nodes.form.self[0].reset();
             clearInterval(timer.status);
             clearInterval(timer.size);
             nodes.buttons.file.enable();
@@ -123,29 +115,33 @@ $(document).ready(function() {
         }});
     });
 
-    jQuery.fn.enable = function() {return this.prop('disabled', false);};
-    jQuery.fn.disable = function() {return this.prop('disabled', true);};
+    update = new function() {
+        this.status = function() {
+            let status = upload.getStatus();
+            nodes.indicators.speed.text(
+                Human.size(status.speed) + '/c' + ' (' + Human.size(status.chunk) + ')'
+            );
+            nodes.indicators.time.text(
+                Human.time(status.time.elapsed) + ' / ' + Human.time(status.time.estimate)
+            );
+        };
+        this.size = function() {
+            let size = upload.getSize();
+            let percent = Math.round(size * 100 / file.size);
+            nodes.indicators.progress.css('width',  percent + '%')
+                .text(Human.size(size) + ' (' + percent + '%)');
+        };
+    };
 });
 
 Object.prototype.callIfExists = function(method, argument) {
-//console.log('callIfExists');
-//console.log(this);
-//console.log(method);
-//console.log(this[method]);
-//console.log((this[method] !== undefined));
     if (this[method] !== undefined) this[method](argument); return true;
 };
 Object.defineProperty(Object.prototype, 'callIfExists', {enumerable: false});
-/*
-function callIfExists(object, method, parameter = null) {
-//console.log('callIfExists');
-//console.log(this);
-//console.log(method);
-//console.log(this[method]);
-//console.log((this[method] !== undefined));
-    if (object[method] !== undefined) object[method](parameter);
-}
-*/
+
+$.fn.enable = function() {return this.prop('disabled', false)};
+$.fn.disable = function() {return this.prop('disabled', true)};
+$.fn.findFirst = function(selector) {return this.find(selector).first();};
 
 class Human {
     static size(bytes) {
