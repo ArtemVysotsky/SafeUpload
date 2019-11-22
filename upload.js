@@ -28,9 +28,10 @@ class Upload {
         limit: 5, // максимальна дозволена кількість повторних запитів
         interval: 5}; // тривалість паузи між повторними запитами, секунди
     #error; // текст помилки (при наявності)
-    #callbacks = {}; // функції, які виконуються в залежності від результату завантаження файлу
-
-
+    #callbacks = {
+        done: () => {},  // дії при вдалому завантаження файлу
+        fail: () => {},  // дії при невдалому завантажені файлу
+        always: () => {}}; // дії при любій події
 
     constructor(url, file, options = null, callbacks = {}) {
         this.#url = url + '?action=';
@@ -46,7 +47,9 @@ class Upload {
         this.#callbacks = callbacks;
         if (this.#file > this.#limit) this.#setError('Розмір файлу більше допустимого');
     }
+
     getSize() {return this.#size;}
+
     getStatus() {
         let status = {};
         status.chunk = this.#length;
@@ -61,42 +64,45 @@ class Upload {
         }
         return status;
     }
+
     #setError = (error) => {
         this.#file = null;
         this.#error = error;
-        this.#callbacks.callIfExists('fail');
+        this.#callbacks.fail();
+        this.#callbacks.always();
     };
+
     getError() {return this.#error;}
-    start(callbacks = {}) {
-        this.#request('open', {}, {
-            done: (response) => {
-                this.#hash = response.hash;
-                this.#time.start = new Date().getTime() / 1000;
-                this.#append(callbacks);
-                callbacks.callIfExists('done');
-            },
-            fail: () => {callbacks.callIfExists('fail')},
-            always: () => {callbacks.callIfExists('always')}
+
+    start(callback = () => {}) {
+        this.#request('open', {}, (response) => {
+            this.#hash = response.hash;
+            this.#time.start = new Date().getTime() / 1000;
+            this.#append(callback);
+            callback();
         });
     }
-    pause(callback = {}) {
+
+    pause(callback = () => {}) {
         this.#time.pause = new Date().getTime() / 1000;
         this.#pause = callback;
     }
-    resume(callbacks = {}) {
+
+    resume(callback = () => {}) {
         this.#time.start = (new Date().getTime() / 1000) - (this.#time.pause - this.#time.start);
         this.#pause = null;
-        this.#append(callbacks);
+        this.#append(callback);
     }
-    stop(callbacks = {}) {
+
+    stop(callback = () => {}) {
         if (this.#pause !== null) {
-            this.#remove(callbacks);
+            this.#remove(callback);
         } else {
-            this.#stop = callbacks;
+            this.#stop = callback;
         }
     }
 
-    #append = (callbacks = {}) => {
+    #append = (callback = () => {}) => {
         if (this.#pause !== null) {
             this.#speed = 0;
             this.#pause();
@@ -109,54 +115,44 @@ class Upload {
         let timestamp = new Date().getTime();
         let end = this.#offset + this.#length;
         let chunk = this.#file.slice(this.#offset, end);
-        this.#request('append', {chunk: chunk}, {
-            done: (response) => {
-                let interval = (new Date().getTime() - timestamp) / 1000;
-                let speed = Math.round((response.size - this.#size) / interval);
-                if (speed > this.#speed) {
-                    if (this.#length < 104576) this.#length += 1024;
-                } else {
-                    if (this.#length > 1024) this.#length -= 1024;
-                }
-                this.#speed = speed;
-                this.#size = response.size;
-                if (this.#size < this.#file.size) {
-                    this.#offset = end;
-                    this.#append();
-                } else {
-                    this.#close();
-                }
-                this.#iteration ++;
-                callbacks.callIfExists('done');
-            },
-            fail: () => {callbacks.callIfExists('fail')},
-            always: () => {callbacks.callIfExists('always')}
-        });
-    };
-
-    #close = (callbacks = {}) => {
-        this.#request('close', {time: this.#file.lastModified}, {
-            done: (response) => {
-                if (response.size !== this.#file.size)
-                    this.#setError('Неправельний розмір завантаженого файлу');
-                this.#speed = (new Date().getTime() / 1000) - this.#time.start;
-                this.#speed = Math.round(this.#size / this.#speed);
-                callbacks.callIfExists('done');
-                this.#callbacks.callIfExists('done');
-            },
-            fail: () => {callbacks.callIfExists('fail')},
-            always: () => {
-                callbacks.callIfExists('always');
-                this.#callbacks.callIfExists('always');
+        this.#request('append', {chunk: chunk}, (response) => {
+            let interval = (new Date().getTime() - timestamp) / 1000;
+            let speed = Math.round((response.size - this.#size) / interval);
+            if (speed > this.#speed) {
+                if (this.#length < 104576) this.#length += 1024;
+            } else {
+                if (this.#length > 1024) this.#length -= 1024;
             }
+            this.#speed = speed;
+            this.#size = response.size;
+            if (this.#size < this.#file.size) {
+                this.#offset = end;
+                this.#append();
+            } else {
+                this.#close();
+            }
+            this.#iteration ++;
+            callback();
         });
     };
 
-    #remove = (callbacks = {}) => {
-        this.#request('remove', {}, callbacks);
+    #close = (callback = () => {}) => {
+        this.#request('close', {time: this.#file.lastModified}, (response) => {
+            if (response.size !== this.#file.size)
+                this.#setError('Неправельний розмір завантаженого файлу');
+            this.#speed = (new Date().getTime() / 1000) - this.#time.start;
+            this.#speed = Math.round(this.#size / this.#speed);
+            callback();
+            this.#callbacks.done();
+            this.#callbacks.always();
+        });
     };
 
-    #request = (action, data = {}, callbacks = {}) => {
+    #remove = (callback = () => {}) => {
+        this.#request('remove', {}, callback);
+    };
+
+    #request = (action, data = {}, callback = () => {}) => {
         let params = {
             method: 'POST', url:this.#url + action, data: {},
             text: 'text', dataType: 'json', cache: false, timeout: this.#timeout * 1000};
@@ -172,40 +168,29 @@ class Upload {
             params.processData = false;
             params.contentType = false;
         }
-        $.ajax(params)
-        .done((response) => {
+        $.ajax(params).done((response) => {
             this.#retry.iteration = 0;
             if (response.exception !== undefined) {
                 this.#setError(jqXHR.exception);
             } else {
-                callbacks.callIfExists('done', response);
+                callback(response);
             }
-        })
-        .fail((jqXHR) => {
+        }).fail((jqXHR) => {
             if (jqXHR.readyState === 4) {
                 this.#setError('Неможливо виконати запит "' + action + '" (' + jqXHR.statusText + ')');
                 //this.#setError(jqXHR.responseText);
-                callbacks.callIfExists('fail', jqXHR);
                 return;
             }
             this.#retry.iteration ++;
             if (this.#retry.iteration > this.#retry.limit) {
-                let error = 'При завантажені файлу на сервер виникла помилка';
-                this.#remove({
-                    done: () => {this.#setError(error + ' (файл видалено)')},
-                    fail: () => {this.#setError(error + ' (не можу видалити файл)')},
-                    always: () => {callbacks.callIfExists('fail', jqXHR)}
+                this.#remove(() => {
+                    this.#setError('При завантажені файлу на сервер виникла помилка')
                 });
                 return;
             }
-            setTimeout(() => {
-                this.#request('size', null, {
-                    'done': (response) => {callbacks.callIfExists('done', response)},
-                    'fail': (jqXHR) => {callbacks.callIfExists('fail', jqXHR)},
-                    'always': (response) => {callbacks.callIfExists('always', response)}
-                })
-            }, this.#retry.interval * 1000);
-        })
-        .always((response) => {callbacks.callIfExists('always', response)})
+            setTimeout(
+                () => {this.#request(action, null, callback(jqXHR))},
+                this.#retry.interval * 1000);
+        });
     }
 }
