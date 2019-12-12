@@ -8,6 +8,8 @@
  * @copyright   Всі права застережено (c) 2019 Upload
  */
 
+sleep(0);
+
 set_error_handler('exceptionErrorHandler');
 
 $output = [];
@@ -20,24 +22,24 @@ try {
 
     if (!isset($_POST['name'])) throw new Exception('Відсутня назва файлу');
 
-    $file = new File($_POST['name'], $_POST['hash'] ?? null);
+    $file = new File($_POST['name']);
+
+    if (isset($_POST['hash'])) $file->setHash($_POST['hash']);
 
     switch($_GET['action']) {
 
         case 'open': $output['hash'] = $file->open(); break;
 
-        case 'append': $output['size'] = $file->append(($_FILES['chunk']) ?? null); break;
+        case 'append': $output['size'] = $file->append($_FILES['chunk']); break;
 
         case 'close': $output['size'] = $file->close(($_POST['time']) ?? null); break;
 
         case 'remove': $file->remove(); break;
 
-        //case 'size': $output['size'] = $file->size(); break;
-
         default: throw new Exception('Невідома дія');
     }
 
-} catch (Throwable $exception) {
+} catch (Exception $exception) {
 
     header('HTTP/1.x 500 Internal Server Error');
 

@@ -7,7 +7,8 @@
  * @copyright   Всі права застережено (c) 2019 Upload
  */
 
-/** @typedef {object} jqXHR */
+/** @typedef {object} jqXHR **/
+/** @typedef {object} jqXHR.responseJSON **/
 
 class Upload {
     #file; // об'єкт файла форми (Files[0])
@@ -45,16 +46,13 @@ class Upload {
             }
         }
         this.#callbacks = callbacks;
-        if (this.#file > this.#limit) this.#setError('Розмір файлу більше допустимого');
+        if (this.#file.size > this.#limit) this.#setError('Розмір файлу більше допустимого');
     }
 
     getSize() {return this.#size;}
 
     getStatus() {
-        let status = {};
-        status.chunk = this.#length;
-        status.speed = this.#speed;
-        status.time = {};
+        let status = {chunk: this.#length, speed: this.#speed, time: {}};
         status.time.elapsed = Math.round((new Date().getTime() / 1000) - this.#time.start);
         if (this.#speed > 0) {
             status.time.estimate = this.#file.size / (this.#size / status.time.elapsed);
@@ -66,7 +64,6 @@ class Upload {
     }
 
     #setError = (error) => {
-        this.#file = null;
         this.#error = error;
         this.#callbacks.fail();
         this.#callbacks.always();
@@ -153,6 +150,7 @@ class Upload {
     };
 
     #request = (action, data = {}, callback = () => {}) => {
+console.log(data);
         let params = {
             method: 'POST', url:this.#url + action, data: {},
             text: 'text', dataType: 'json', cache: false, timeout: this.#timeout * 1000};
@@ -176,12 +174,17 @@ class Upload {
                 callback(response);
             }
         }).fail((jqXHR) => {
+console.log(jqXHR);
             if (jqXHR.readyState === 4) {
-                this.#setError('Неможливо виконати запит "' + action + '" (' + jqXHR.statusText + ')');
-                //this.#setError(jqXHR.responseText);
+                this.#setError('Під час виконання запиту "' + action + '" виникла помилка');
+                if ((jqXHR.status === 500)
+                    && (jqXHR.responseJSON !== undefined)
+                    && (jqXHR.responseJSON.exception !== undefined))
+                    console.error(jqXHR.statusText + ': ' + jqXHR.responseJSON.exception);
                 return;
             }
             this.#retry.iteration ++;
+            console.warn('Повторний запит #' + this.#retry.iteration);
             if (this.#retry.iteration > this.#retry.limit) {
                 this.#remove(() => {
                     this.#setError('При завантажені файлу на сервер виникла помилка')
@@ -189,7 +192,7 @@ class Upload {
                 return;
             }
             setTimeout(
-                () => {this.#request(action, null, callback(jqXHR))},
+                () => {this.#request(action, data, callback(jqXHR))},
                 this.#retry.interval * 1000);
         });
     }

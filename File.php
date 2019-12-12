@@ -23,19 +23,19 @@ class File {
     private $sourceTemporary;
 
     /** @var string Шлях до теки зберігання завантажених файлів */
-    private $path = __DIR__ . '/uploads';
+    protected $path = __DIR__ . '/uploads';
 
     /** @var string Шлях до теки тимчасового зберігання файлу під час завантження */
-    private $pathTemporary = __DIR__  . '/uploads/.tmp';
+    protected $pathTemporary = __DIR__  . '/uploads/.tmp';
 
     /** @var string Хеш файла */
-    private $hash;
+    protected $hash;
 
     /** @var integer Максимальний розмір файла */
-    private $size = 100 * 1048576;
+    protected $size = 100 * 1024 * 1024;
 
     /** @var boolean Ознака дозволу перезапису файлів з однаковою назвою */
-    private $overwrite = true;
+    protected $overwrite = true;
 
     /** @var array Перелік кодів та опису помилок завантаження файлів */
     protected $errors = array(
@@ -54,9 +54,18 @@ class File {
     * Конструктор класу
     *
     * @param string $name Назва файла
-    * @param string|null $hash Хеш файла
     */
-    public function __construct(string $name, string $hash = null) {
+    public function __construct(string $name) {
+
+        $this->setName($name);
+     }
+
+    /**
+     * Перевіряє та зберігає назву файла
+     *
+     * @param string $name Назва файла
+     */
+    protected function setName($name): void {
 
         $this->name = $name;
 
@@ -65,27 +74,27 @@ class File {
         if (!$this->overwrite && file_exists($this->source))
 
             throw new Exception('Файл з такою назвою вже існує');
-
-        if (isset($hash)) {
-
-            $this->hash = $hash;
-
-            $this->setTemporary();
-        }
     }
 
     /**
-    * Встановлює тимчасові назву та шлях файла
-    *
-    * @param boolean $exists Ознака виконання перевірки наявності тимчасового файлау
-    */
-    private function setTemporary($exists = true): void {
+     * Перевіряє та зберігає хеш файла
+     *
+     * @param string|null $hash Хеш файла
+     */
+    public function setHash($hash = null): void {
 
-        if (strlen($this->hash) == 0) throw new Exception('Відсутній хеш файлу');
+        if (isset($hash)) {
 
-        if (!preg_match('/^[0-9abcdef]{32}$/', $this->hash))
+            if (!preg_match('/^[0-9abcdef]{32}$/', $hash))
 
-            throw new Exception('Неправильний хеш файлу');
+                throw new Exception('Неправильний хеш файлу');
+
+            $this->hash = $hash;
+
+        } else {
+
+            $this->hash = bin2hex(random_bytes(16));
+        }
 
         $this->nameTemporary = $this->name . '.' . $this->hash;
 
@@ -93,9 +102,9 @@ class File {
 
             $this->pathTemporary . DIRECTORY_SEPARATOR . $this->nameTemporary;
 
-        if ($exists && !file_exists($this->sourceTemporary))
+        if (isset($hash) && !file_exists($this->sourceTemporary))
 
-            throw new Exception('Невідомий файл');
+            throw new Exception('Файл не знайдено');
     }
 
     /**
@@ -105,13 +114,9 @@ class File {
     */
     public function open(): string {
 
-        $this->hash = bin2hex(random_bytes(16));
+        $this->setHash();
 
-        $this->setTemporary(false);
-
-        if (file_put_contents($this->sourceTemporary, null) === false)
-
-            throw new Exception('Неможливо створити тимчасовий файл');
+        file_put_contents($this->sourceTemporary, null);
 
         return $this->hash;
     }
@@ -119,48 +124,30 @@ class File {
     /**
      * Додає в тимчасовий файл надісланий шматок
      *
-     * @param array $chunk Масив з даними завантаженого файлу шматка
+     * @param array $file Масив з даними завантаженого файлу шматка
      * @return integer Розмір тимчасового файла після запису шматка
      */
-    public function append(array $chunk): int {
+    public function append(array $file): int {
 
-        if ($chunk['error'] !== 0)
+        if ($file['error'] !== 0)
 
-            throw new Exception('Помилка завантаження: ' . $this->errors[$chunk['error']]);
+            throw new Exception('Помилка завантаження: ' . $this->errors[$file['error']]);
 
-        if (!is_uploaded_file($chunk['tmp_name']))
+        if (!is_uploaded_file($file['tmp_name']))
 
             throw new Exception('Неправильно завантажений файл');
 
-        $chunk = file_get_contents($chunk['tmp_name']);
-
-        if ($chunk === false)
-
-            throw new Exception('Неможливо зчитати дані з надісланого файлу');
-
-        $result = file_put_contents($this->sourceTemporary, $chunk, FILE_APPEND);
-
-        if ($result === false)
-
-            throw new Exception('Неможливо записати дані в тимчасовий файл');
-
-        $size = $this->size();
+        $size = filesize($this->sourceTemporary);
 
         if ($size > $this->size)
 
             throw new Exception('Розмір файла перевищує допустимий');
 
-        return $size;
-    }
+        $chunk = file_get_contents($file['tmp_name']);
 
-    /**
-     * Видаляє тимчасовий файл
-     */
-    public function remove(): void {
+        $result = file_put_contents($this->sourceTemporary, $chunk, FILE_APPEND);
 
-        if (!unlink($this->sourceTemporary))
-
-            throw new Exception('Неможливо видалити тимчасовий файл');
+        return $size + $result;
     }
 
     /**
@@ -169,32 +156,20 @@ class File {
      * @param integer $time Час останньої модифікації файла
      * @return integer Остаточний розмір файла
      */
-    public function close(int $time = null): int {
+    public function close(int $time): int {
 
-        if (!rename($this->sourceTemporary, $this->source))
+        rename($this->sourceTemporary, $this->source);
 
-            throw new Exception('Неможливо зберегти тимчасовий файл');
-
-        if (isset($time))
-
-            if (!touch($this->source, $time))
-
-                throw new Exception('Неможливо встановити час останньої модифікації файлу');
+        touch($this->source, round($time / 1000), time());
 
         return filesize($this->source);
     }
 
     /**
-     * Визначає розмір файла
-     *
-     * @return integer Поточний розмір файла
+     * Видаляє тимчасовий файл
      */
-    public function size(): int {
+    public function remove(): void {
 
-        if (!($size = filesize($this->sourceTemporary)))
-
-            throw new Exception('Неможливо визначити розмір файла');
-
-        return $size;
+        if (file_exists($this->sourceTemporary)) unlink($this->sourceTemporary);
     }
 }
