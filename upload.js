@@ -49,11 +49,13 @@ class Upload {
         if (this.#file.size > this.#limit) this.#setError('Розмір файлу більше допустимого');
     }
 
+    getTime() {return Math.round(new Date().getTime() / 1000);}
+
     getSize() {return this.#size;}
 
     getStatus() {
         let status = {chunk: this.#length, speed: this.#speed, time: {}};
-        status.time.elapsed = Math.round((new Date().getTime() / 1000) - this.#time.start);
+        status.time.elapsed = Math.round(this.getTime() - this.#time.start);
         if (this.#speed > 0) {
             status.time.estimate = this.#file.size / (this.#size / status.time.elapsed);
             status.time.estimate = Math.round(status.time.estimate - status.time.elapsed);
@@ -74,19 +76,19 @@ class Upload {
     start(callback = () => {}) {
         this.#request('open', {}, (response) => {
             this.#hash = response.hash;
-            this.#time.start = new Date().getTime() / 1000;
+            this.#time.start = this.getTime();
             this.#append(callback);
             callback();
         });
     }
 
     pause(callback = () => {}) {
-        this.#time.pause = new Date().getTime() / 1000;
+        this.#time.pause = this.getTime();
         this.#pause = callback;
     }
 
     resume(callback = () => {}) {
-        this.#time.start = (new Date().getTime() / 1000) - (this.#time.pause - this.#time.start);
+        this.#time.start = this.getTime() - (this.#time.pause - this.#time.start);
         this.#pause = null;
         this.#append(callback);
     }
@@ -113,7 +115,7 @@ class Upload {
         let end = this.#offset + this.#length;
         let chunk = this.#file.slice(this.#offset, end);
         this.#request('append', {chunk: chunk}, (response) => {
-            let interval = (new Date().getTime() - timestamp) / 1000;
+            let interval = this.getTime() - (timestamp / 1000);
             let speed = Math.round((response.size - this.#size) / interval);
             if (speed > this.#speed) {
                 if (this.#length < 104576) this.#length += 1024;
@@ -137,7 +139,7 @@ class Upload {
         this.#request('close', {time: this.#file.lastModified}, (response) => {
             if (response.size !== this.#file.size)
                 this.#setError('Неправельний розмір завантаженого файлу');
-            this.#speed = (new Date().getTime() / 1000) - this.#time.start;
+            this.#speed = this.getTime() - this.#time.start;
             this.#speed = Math.round(this.#size / this.#speed);
             callback();
             this.#callbacks.done();
@@ -150,11 +152,9 @@ class Upload {
     };
 
     #request = (action, data = {}, callback = () => {}) => {
-console.log(data);
         let params = {
-            method: 'POST', url:this.#url + action, data: {},
+            method: 'POST', url:this.#url + action, data: {...data},
             text: 'text', dataType: 'json', cache: false, timeout: this.#timeout * 1000};
-        params.data = data;
         params.data.name = this.#file.name;
         if (this.#hash !== null) params.data.hash = this.#hash;
         if (params.data.chunk !== undefined) {
@@ -174,7 +174,6 @@ console.log(data);
                 callback(response);
             }
         }).fail((jqXHR) => {
-console.log(jqXHR);
             if (jqXHR.readyState === 4) {
                 this.#setError('Під час виконання запиту "' + action + '" виникла помилка');
                 if ((jqXHR.status === 500)
@@ -184,15 +183,13 @@ console.log(jqXHR);
                 return;
             }
             this.#retry.iteration ++;
-            console.warn('Повторний запит #' + this.#retry.iteration);
             if (this.#retry.iteration > this.#retry.limit) {
-                this.#remove(() => {
-                    this.#setError('При завантажені файлу на сервер виникла помилка')
-                });
+                alert('Сервер не відповідає, спробуйте пізніше');
                 return;
             }
+            console.warn('Повторний запит #' + this.#retry.iteration + ' / ' + Human.time(this.getTime()));
             setTimeout(
-                () => {this.#request(action, data, callback(jqXHR))},
+                () => {this.#request(action, data, (jqXHR) => {callback(jqXHR)})},
                 this.#retry.interval * 1000);
         });
     }

@@ -8,7 +8,6 @@
  */
 
 /** ToDo: Дозавантаження частково завантажених файлів через паузу */
-/** ToDo: Хешування пакетів (hash -> key, create crc hash, "blockchain") */
 
 $(document).ready(function() {
     const url = '/api.php', // адреса скрипта з API для отримання файлу
@@ -24,7 +23,7 @@ $(document).ready(function() {
     let file, upload, timer = {status: {}, size: null}; // робочі змінні
     let nodes = {}; // збережені посилання на елементи сторінки
     nodes.main = $('main');
-    nodes.alert = nodes.main.findFirst('div.alert');
+    //nodes.alert = nodes.main.findFirst('div.alert');
     nodes.card = nodes.main.findFirst('div.card');
     nodes.form = {};
     nodes.form.self = nodes.card.findFirst('div.card-body form');
@@ -45,7 +44,7 @@ $(document).ready(function() {
     nodes.indicators.progress = nodes.form.progress.findFirst('div.progress-bar');
 
 
-    nodes.alert.toggle().click(function(){$(this).hide()}); // ховаємо надпис про необхідність JS
+    //nodes.alert.toggle().click(function(){$(this).hide()}); // ховаємо надпис про необхідність JS
     nodes.card.show(); // показуємо форму завантаження файлу
 
     // Дії при виборі файлу користувачем
@@ -53,7 +52,8 @@ $(document).ready(function() {
         file = $(this)[0].files[0];
         if (file === undefined) return false;
         if (file.size > options.limit) {
-            nodes.alert.text('Розмір файлу більше допустимого').show();
+            //nodes.alert.text('Розмір файлу більше допустимого').show();
+            alert('Розмір файлу більше допустимого');
             nodes.form.self[0].reset();
             nodes.buttons.upload.disable();
             file = null;
@@ -75,7 +75,8 @@ $(document).ready(function() {
             },
             fail: () => { // дії при невдалому завантаженні файлу
                 nodes.buttons.upload.disable();
-                nodes.alert.text(upload.getError()).show()},
+                //nodes.alert.text(upload.getError()).show()
+                alert(upload.getError())},
             always: () => { // дії для любих випадків
                 nodes.buttons.file.enable();
                 nodes.buttons.pause.disable();

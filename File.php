@@ -72,7 +72,6 @@ class File {
         $this->source = $this->path . DIRECTORY_SEPARATOR . $this->name;
 
         if (!$this->overwrite && file_exists($this->source))
-
             throw new Exception('Файл з такою назвою вже існує');
     }
 
@@ -86,7 +85,6 @@ class File {
         if (isset($hash)) {
 
             if (!preg_match('/^[0-9abcdef]{32}$/', $hash))
-
                 throw new Exception('Неправильний хеш файлу');
 
             $this->hash = $hash;
@@ -99,11 +97,9 @@ class File {
         $this->nameTemporary = $this->name . '.' . $this->hash;
 
         $this->sourceTemporary =
-
             $this->pathTemporary . DIRECTORY_SEPARATOR . $this->nameTemporary;
 
         if (isset($hash) && !file_exists($this->sourceTemporary))
-
             throw new Exception('Файл не знайдено');
     }
 
@@ -130,17 +126,14 @@ class File {
     public function append(array $file): int {
 
         if ($file['error'] !== 0)
-
             throw new Exception('Помилка завантаження: ' . $this->errors[$file['error']]);
 
         if (!is_uploaded_file($file['tmp_name']))
-
             throw new Exception('Неправильно завантажений файл');
 
         $size = filesize($this->sourceTemporary);
 
         if ($size > $this->size)
-
             throw new Exception('Розмір файла перевищує допустимий');
 
         $chunk = file_get_contents($file['tmp_name']);
