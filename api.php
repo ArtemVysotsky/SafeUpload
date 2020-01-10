@@ -3,12 +3,13 @@
  * Файл з API для керування процесом завантаження
  *
  * @author      Артем Висоцький <a.vysotsky@gmail.com>
- * @package     Upload
- * @link        http://upload.local
- * @copyright   Всі права застережено (c) 2019 Upload
+ * @link        https://github.com/ArtemVysotsky/Upload
+ * @copyright   Всі права застережено (c) 2020 Upload
  */
 
-sleep(0);
+//sleep(1);
+
+//sleep(10); exit(0);
 
 set_error_handler('exceptionErrorHandler');
 

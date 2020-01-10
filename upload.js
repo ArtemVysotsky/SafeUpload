@@ -2,37 +2,64 @@
  * Клас для роботи з завантаженням файла
  *
  * @author      Артем Висоцький <a.vysotsky@gmail.com>
- * @package     Upload
- * @link        http://upload.local
- * @copyright   Всі права застережено (c) 2019 Upload
+ * @link        https://github.com/ArtemVysotsky/Upload
+ * @copyright   Всі права застережено (c) 2020 Upload
  */
+
+/** ToDo: Впорядкувати властивості класу для зручності */
+/** ToDo: Виправити автоматичне визначення оптимального розміру фрагменту файла */
 
 /** @typedef {object} jqXHR **/
 /** @typedef {object} jqXHR.responseJSON **/
 
 class Upload {
-    #file; // об'єкт файла форми (Files[0])
     #url; // адреса API для завантаження файла
+    #file2 = { //
+        data: null, // об'єкт файла форми (Files[0])
+        hash: null, // тичасовий хеш файлу на час завантаження
+        limit: 1024 * 1024 * 1024 // максимальний розмір файла (1ГБ)
+    };
+    #file; // об'єкт файла форми (Files[0])
     #hash; // тичасовий хеш файлу на час завантаження
-    #length = 1024; // початкова довжина фрагмента файла, байти (chunk size)
-    #offset = 0; // зміщення від початку файла
-    #size = 0; // розмір завантаженої фрагмента файла
     #limit = 1024 * 1024 * 1024; // максимальний розмір файла (1ГБ)
+    #chunk = { //
+        number: 0, //
+        offset: 0, //
+        length: {} //
+    };
     #iteration = 1; // порядковий номер циклу завантаження фрагмента файла
-    #time = {start: null, pause: null}; // час початку та призупинення завантаження файла
+    #length = { // довжина фрагмента файла, байти
+        minimum: 1024, //
+        current: 1024, //
+        maximum: 1048576, //
+        step: 1024 //
+    };
+    #offset = 0; // зміщення від початку файла
+    #status = { //
+        time: {}, //
+        size: 0, //
+        speed: { //
+            preview: 0, //
+            current:0, //
+            next: 0, //
+            iteration: 0, //
+            iterations: 10 //
+        }
+    };
+    #time = {start: null, pause: null, stop: null, status: null}; // зберігає час виклику дій над процесом завантаження файла
+    #size = 0; // розмір завантаженої фрагмента файла
     #speed = 0; // швидкість завантаження останнього фрагмента файла
-    #pause = null; // зберігає функцію, яка виконується після призупинки процесу завантаження файла
-    #stop = null; // зберігає функції, які використовуються при зупинці процесу завантаження файла
-    #timeout = 30; // максимальний дозволений час тривалості запитсу, секунди
+    #timeout = 30; // максимальний дозволений час тривалості запиту, секунди
     #retry = { // дані повторного запиту (номер циклу, дозволена кількість,
         iteration: 0, // поточний номер ітерації повторного запиту
         limit: 5, // максимальна дозволена кількість повторних запитів
-        interval: 5}; // тривалість паузи між повторними запитами, секунди
+        interval: 5 // тривалість паузи між повторними запитами, секунди
+    };
     #error; // текст помилки (при наявності)
     #callbacks = {
-        done: () => {},  // дії при вдалому завантаження файлу
-        fail: () => {},  // дії при невдалому завантажені файлу
-        always: () => {}}; // дії при любій події
+        start: () => {},  pause: () => {}, resume: () => {}, stop: () => {},
+        done: () => {}, fail: () => {}, always: () => {}
+    };
 
     constructor(url, file, options = null, callbacks = {}) {
         this.#url = url + '?action=';
@@ -54,7 +81,7 @@ class Upload {
     getSize() {return this.#size;}
 
     getStatus() {
-        let status = {chunk: this.#length, speed: this.#speed, time: {}};
+        let status = {chunk: this.#length.current, speed: this.#speed, time: {}};
         status.time.elapsed = Math.round(this.getTime() - this.#time.start);
         if (this.#speed > 0) {
             status.time.estimate = this.#file.size / (this.#size / status.time.elapsed);
@@ -73,55 +100,55 @@ class Upload {
 
     getError() {return this.#error;}
 
-    start(callback = () => {}) {
+    start() {
         this.#request('open', {}, (response) => {
             this.#hash = response.hash;
             this.#time.start = this.getTime();
-            this.#append(callback);
-            callback();
+            this.#append(this.#callbacks.start);
         });
     }
 
-    pause(callback = () => {}) {
-        this.#time.pause = this.getTime();
-        this.#pause = callback;
-    }
+    pause() {this.#time.pause = this.getTime()}
 
-    resume(callback = () => {}) {
+    resume() {
         this.#time.start = this.getTime() - (this.#time.pause - this.#time.start);
-        this.#pause = null;
-        this.#append(callback);
+        this.#time.pause = null;
+        this.#append(this.#callbacks.resume);
     }
 
-    stop(callback = () => {}) {
-        if (this.#pause !== null) {
-            this.#remove(callback);
+    stop() {
+        if (this.#time.pause !== null) {
+            this.#remove();
         } else {
-            this.#stop = callback;
+            this.#time.stop = this.getTime();
         }
     }
 
     #append = (callback = () => {}) => {
-        if (this.#pause !== null) {
+        if (this.#time.pause !== null) {
             this.#speed = 0;
-            this.#pause();
+            this.#callbacks.pause();
             return;
         }
-        if (this.#stop !== null) {
-            this.#remove(this.#stop);
+        if (this.#time.stop !== null) {
+            this.#remove();
             return;
         }
-        let timestamp = new Date().getTime();
-        let end = this.#offset + this.#length;
+        let length = this.#length.current + this.#length.step;
+        let end = this.#offset + length;
         let chunk = this.#file.slice(this.#offset, end);
+        let timestamp = (new Date()).getTime();
         this.#request('append', {chunk: chunk}, (response) => {
-            let interval = this.getTime() - (timestamp / 1000);
+            let interval = ((new Date()).getTime() - timestamp) / 1000;
             let speed = Math.round((response.size - this.#size) / interval);
+
+
             if (speed > this.#speed) {
-                if (this.#length < 104576) this.#length += 1024;
+                if (this.#length.current < this.#length.maximum) this.#length.current += 1024;
             } else {
-                if (this.#length > 1024) this.#length -= 1024;
+                if (this.#length.current > this.#length.minimum) this.#length.current -= 1024;
             }
+
             this.#speed = speed;
             this.#size = response.size;
             if (this.#size < this.#file.size) {
@@ -135,20 +162,20 @@ class Upload {
         });
     };
 
-    #close = (callback = () => {}) => {
+    #close = () => {
         this.#request('close', {time: this.#file.lastModified}, (response) => {
             if (response.size !== this.#file.size)
                 this.#setError('Неправельний розмір завантаженого файлу');
             this.#speed = this.getTime() - this.#time.start;
             this.#speed = Math.round(this.#size / this.#speed);
-            callback();
+            //callback();
             this.#callbacks.done();
             this.#callbacks.always();
         });
     };
 
-    #remove = (callback = () => {}) => {
-        this.#request('remove', {}, callback);
+    #remove = () => {
+        this.#request('remove', {}, this.#callbacks.stop);
     };
 
     #request = (action, data = {}, callback = () => {}) => {
@@ -156,7 +183,8 @@ class Upload {
             method: 'POST', url:this.#url + action, data: {...data},
             text: 'text', dataType: 'json', cache: false, timeout: this.#timeout * 1000};
         params.data.name = this.#file.name;
-        if (this.#hash !== null) params.data.hash = this.#hash;
+        params.data.hash = this.#hash;
+        if (this.#hash !== undefined) params.data.hash = this.#hash;
         if (params.data.chunk !== undefined) {
             let formData = new FormData();
             formData.append('name', params.data.name);
@@ -184,6 +212,7 @@ class Upload {
             }
             this.#retry.iteration ++;
             if (this.#retry.iteration > this.#retry.limit) {
+                if (action !== 'open') this.#callbacks.timeout();
                 alert('Сервер не відповідає, спробуйте пізніше');
                 return;
             }

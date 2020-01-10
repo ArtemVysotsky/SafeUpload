@@ -2,9 +2,8 @@
  * Головний скрипт
  *
  * @author      Артем Висоцький <a.vysotsky@gmail.com>
- * @package     Upload
- * @link        http://upload.local
- * @copyright   Всі права застережено (c) 2019 Upload
+ * @link        https://github.com/ArtemVysotsky/Upload
+ * @copyright   Всі права застережено (c) 2020 Upload
  */
 
 /** ToDo: Дозавантаження частково завантажених файлів через паузу */
@@ -15,8 +14,8 @@ $(document).ready(function() {
             limit: (100 * 1024 * 1024), // максимальний розмір файлу, байти
             timeout: 3, // час очікування відповіді від скрипта API, секунди
             retry: {
-                interval: 3, // час очікування між повторними запитами, секунди
-                limit: 5}}, // максимальна кількість повторних запитів
+                interval: 5, // час очікування між повторними запитами, секунди
+                limit: 3}}, // максимальна кількість повторних запитів
         interval = {
             status: 1000, // інтервал оновляення статусу завантаження файлу, мілісекунди
             size: 200}; // інтервал оновляення розміру завантаження файлу, мілісекунди
@@ -45,7 +44,57 @@ $(document).ready(function() {
 
 
     //nodes.alert.toggle().click(function(){$(this).hide()}); // ховаємо надпис про необхідність JS
-    nodes.card.show(); // показуємо форму завантаження файлу
+    //nodes.card.show(); // показуємо форму завантаження файлу
+
+    let callbacks = {};
+    // Дії при запуску процесу завантаження файлу
+    callbacks.start = () => {
+        nodes.buttons.file.disable();
+        nodes.buttons.upload.disable();
+        nodes.buttons.pause.enable();
+        nodes.buttons.cancel.enable();
+    };
+    // Дії при призупиненні процесу завантаження файлу
+    callbacks.pause = () => {
+        nodes.buttons.resume.enable();
+        nodes.buttons.pause.disable();
+        setTimeout(function () {clearInterval(timer.status)}, interval.status);
+        setTimeout(function () {clearInterval(timer.size)}, interval.size);   };
+    // Дії при продовжені процесу завантаження файлу
+    callbacks.resume = () => {
+        nodes.buttons.pause.enable();
+        nodes.buttons.resume.disable();
+        timer.status = setInterval(Update.status, interval.status);
+        timer.size = setInterval(Update.size, interval.size);
+    };
+    // Дії при зупинці процесу завантаження файлу
+    callbacks.stop = () => {
+        clearInterval(timer.status);
+        clearInterval(timer.size);
+        nodes.buttons.file.enable();
+        nodes.buttons.upload.disable();
+        nodes.buttons.pause.disable();
+        nodes.buttons.resume.disable();
+        nodes.buttons.cancel.disable();
+    };
+    // Дії при успішному завершенні процесу завантаженні файлу
+    callbacks.done = () => {
+        console.log('Файл "' + file.name + '" завантажено вдало');
+    };
+    // Дії при невдалому виконанні процесу завантаженні файлу
+    callbacks.fail = () => {
+        nodes.buttons.upload.disable();
+        alert(upload.getError())
+    };
+    // Дії при успішному завершенні або невдалому виконанні процесу завантаження файлу
+    callbacks.always = () => {
+        nodes.buttons.file.enable();
+        nodes.buttons.pause.disable();
+        nodes.buttons.resume.disable();
+        nodes.buttons.cancel.disable();
+        setTimeout(function () {clearInterval(timer.status)}, interval.status);
+        setTimeout(function () {clearInterval(timer.size)}, interval.size);
+    };
 
     // Дії при виборі файлу користувачем
     nodes.buttons.file.change(function() {
@@ -65,73 +114,21 @@ $(document).ready(function() {
         nodes.indicators.time.text('');
         nodes.indicators.progress.css('width', 0).text(null);
     });
-
     // Дії при запуску процесу завантаження файлу
     nodes.buttons.upload.click(() => {
         // Створення об'єкту для завантаження файлу зі зворотніми функціями
-        upload = new Upload(url, file, options, {
-            done: () => { // дії при успішному завантаженні файлу
-                console.log('Файл "' + file.name + '" завантажено вдало');
-            },
-            fail: () => { // дії при невдалому завантаженні файлу
-                nodes.buttons.upload.disable();
-                //nodes.alert.text(upload.getError()).show()
-                alert(upload.getError())},
-            always: () => { // дії для любих випадків
-                nodes.buttons.file.enable();
-                nodes.buttons.pause.disable();
-                nodes.buttons.resume.disable();
-                nodes.buttons.cancel.disable();
-                setTimeout(function () {clearInterval(timer.status)}, interval.status);
-                setTimeout(function () {clearInterval(timer.size)}, interval.size);
-            }
-        });
-
+        upload = new Upload(url, file, options, callbacks);
         // Запускаємо періодичне оновлення статусу та розміру завантаження файлу
         timer.status = setInterval(Update.status, interval.status);
         timer.size = setInterval(Update.size, interval.size);
-
-        // Запускаємо сам процес завантаження файлу
-        upload.start(() => {
-            nodes.buttons.file.disable();
-            nodes.buttons.upload.disable();
-            nodes.buttons.pause.enable();
-            nodes.buttons.cancel.enable();
-        });
+        upload.start();
     });
-
     // Дії при призупиненні процесу завантаження файлу
-    nodes.buttons.pause.click(() => {
-        upload.pause(() => {
-            nodes.buttons.resume.enable();
-            nodes.buttons.pause.disable();
-            setTimeout(function () {clearInterval(timer.status)}, interval.status);
-            setTimeout(function () {clearInterval(timer.size)}, interval.size);
-        });
-    });
-
+    nodes.buttons.pause.click(() => {upload.pause()});
     // Дії при продовжені процесу завантаження файлу
-    nodes.buttons.resume.click(() => {
-        upload.resume(() => {
-            nodes.buttons.pause.enable();
-            nodes.buttons.resume.disable();
-            timer.status = setInterval(Update.status, interval.status);
-            timer.size = setInterval(Update.size, interval.size);
-        });
-    });
-
+    nodes.buttons.resume.click(() => {upload.resume()});
     // Дії при відміні процесу завантаження файлу
-    nodes.buttons.cancel.click(() => {
-        upload.stop(() => {
-            clearInterval(timer.status);
-            clearInterval(timer.size);
-            nodes.buttons.file.enable();
-            nodes.buttons.upload.disable();
-            nodes.buttons.pause.disable();
-            nodes.buttons.resume.disable();
-            nodes.buttons.cancel.disable();
-        });
-    });
+    nodes.buttons.cancel.click(() => {upload.stop()});
 
     // Клас оновлення стутусу та розміру завантаження файлу
     class Update {
