@@ -3,26 +3,19 @@
  *
  * @author      Артем Висоцький <a.vysotsky@gmail.com>
  * @link        https://github.com/ArtemVysotsky/Upload
- * @copyright   Всі права застережено (c) 2020 Upload
+ * @copyright   GNU General Public License v3
  */
 
-/** ToDo: Дозавантаження частково завантажених файлів через паузу */
-
 $(document).ready(function() {
-    const url = '/api.php', // адреса скрипта з API для отримання файлу
-        options = {
-            limit: (100 * 1024 * 1024), // максимальний розмір файлу, байти
-            timeout: 3, // час очікування відповіді від скрипта API, секунди
-            retry: {
-                interval: 5, // час очікування між повторними запитами, секунди
-                limit: 3}}, // максимальна кількість повторних запитів
+    let file, // об'єкт файл форми завантаження
+        upload, // об'єкт для здійснення завантаження
+        nodes = {}, // збережені посилання на елементи сторінки
+        timer = {status: {}, size: null}, // мітки часу
         interval = {
             status: 1000, // інтервал оновляення статусу завантаження файлу, мілісекунди
-            size: 200}; // інтервал оновляення розміру завантаження файлу, мілісекунди
-    let file, upload, timer = {status: {}, size: null}; // робочі змінні
-    let nodes = {}; // збережені посилання на елементи сторінки
+            size: 200 // інтервал оновляення розміру завантаження файлу, мілісекунди
+        };
     nodes.main = $('main');
-    //nodes.alert = nodes.main.findFirst('div.alert');
     nodes.card = nodes.main.findFirst('div.card');
     nodes.form = {};
     nodes.form.self = nodes.card.findFirst('div.card-body form');
@@ -43,9 +36,6 @@ $(document).ready(function() {
     nodes.indicators.progress = nodes.form.progress.findFirst('div.progress-bar');
 
 
-    //nodes.alert.toggle().click(function(){$(this).hide()}); // ховаємо надпис про необхідність JS
-    //nodes.card.show(); // показуємо форму завантаження файлу
-
     let callbacks = {};
     // Дії при запуску процесу завантаження файлу
     callbacks.start = () => {
@@ -59,7 +49,8 @@ $(document).ready(function() {
         nodes.buttons.resume.enable();
         nodes.buttons.pause.disable();
         setTimeout(function () {clearInterval(timer.status)}, interval.status);
-        setTimeout(function () {clearInterval(timer.size)}, interval.size);   };
+        setTimeout(function () {clearInterval(timer.size)}, interval.size);
+    };
     // Дії при продовжені процесу завантаження файлу
     callbacks.resume = () => {
         nodes.buttons.pause.enable();
@@ -100,14 +91,6 @@ $(document).ready(function() {
     nodes.buttons.file.change(function() {
         file = $(this)[0].files[0];
         if (file === undefined) return false;
-        if (file.size > options.limit) {
-            //nodes.alert.text('Розмір файлу більше допустимого').show();
-            alert('Розмір файлу більше допустимого');
-            nodes.form.self[0].reset();
-            nodes.buttons.upload.disable();
-            file = null;
-            return false;
-        }
         nodes.buttons.upload.enable();
         nodes.indicators.size.text('(' + Human.size(file.size) + ')');
         nodes.indicators.speed.text('');
@@ -117,7 +100,7 @@ $(document).ready(function() {
     // Дії при запуску процесу завантаження файлу
     nodes.buttons.upload.click(() => {
         // Створення об'єкту для завантаження файлу зі зворотніми функціями
-        upload = new Upload(url, file, options, callbacks);
+        upload = new Upload(file, callbacks);
         // Запускаємо періодичне оновлення статусу та розміру завантаження файлу
         timer.status = setInterval(Update.status, interval.status);
         timer.size = setInterval(Update.size, interval.size);
