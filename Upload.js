@@ -13,6 +13,7 @@
 /** @typedef {object} jqXHR.responseJSON **/
 
 class Upload {
+    #time = {zone: {offset: (new Date()).getTimezoneOffset() * 60}}; // зміщення часового поясу, секунди
     #url = '/api.php?action='; // адреса API для завантаження файла
     #options = {
         file: {size: {limit: 1024 * 1024 * 1024}}, // максимальний розмір файла, байти
@@ -40,7 +41,7 @@ class Upload {
         offset: 0, // зміщення від початку файла, байти
         size: 1024 // розмір частини файла, байти
     };
-    #time = { // часові мітки
+    #timers = { // часові мітки
         start: 0, // час початку завантаження, секунди
         pause: 0, // час призупинки завантаження, секунди
         stop: 0, // час зупинки завантаження, секунди
@@ -48,10 +49,18 @@ class Upload {
     };
     #speed = 0; // швидкість завантаження останнього фрагмента файла, біти
     #retry = 0; // порядковий номер поточного повторного запиту
-    #error; // текст помилки (при наявності)
+    #message = null; // текст повідомлення (при наявності)
     #callbacks = {
-        start: () => {},  pause: () => {}, resume: () => {}, stop: () => {},
-        done: () => {}, fail: () => {}, always: () => {}
+        start: () => {}, // після початку процесу завантаження файла
+        pause: () => {}, // після призупинки процесу завантаження файла
+        resume: () => {}, // після продовження процесу завантаження файла
+        stop: () => {}, // після зупинки процесу завантаження файла
+        timeout: () => {}, // після зупинки процесу завантаження файла
+        upload: {
+            done: () => {}, // після вдалого закінчення процесу завантаження файла
+            fail: () => {}, // після невдалого закінчення процесу завантаження файла
+            always: () => {} // після закінчення процесу завантаження файла
+        }
     };
 
     constructor(file, callbacks = {}) {
@@ -61,13 +70,15 @@ class Upload {
             this.#setError('Розмір файлу більше допустимого');
     }
 
-    getTime() {return Math.round(new Date().getTime() / 1000);}
+    getTime() {
+        return Math.round(((new Date()).getTime() / 1000) - this.#time.zone.offset);
+    }
 
     getSize() {return this.#chunk.offset;}
 
     getStatus() {
         let status = {chunk: this.#chunk.size, speed: this.#speed, time: {}};
-        status.time.elapsed = Math.round(this.getTime() - this.#time.start);
+        status.time.elapsed = Math.round(this.getTime() - this.#timers.start);
         if (this.#speed > 0) {
             status.time.estimate = this.#file.size / (this.#chunk.offset / status.time.elapsed);
             status.time.estimate = Math.round(status.time.estimate - status.time.elapsed);
@@ -77,45 +88,52 @@ class Upload {
         return status;
     }
 
-    #setError = (error) => {
-        this.#error = error;
-        this.#callbacks.fail();
-        this.#callbacks.always();
+    getMessage() {return this.#message;}
+
+    #setError = (message) => {
+        this.#message = message;
+        this.#callbacks.upload.fail();
+        this.#callbacks.upload.always();
     };
 
-    getError() {return this.#error;}
 
     start() {
-        this.#request('open', {}, (response) => {
-            this.#file.hash = response.hash;
-            this.#time.start = this.getTime();
-            this.#append(this.#callbacks.start);
-        });
+        this.#timers.start = this.getTime();
+        this.#open();
     }
 
-    pause() {this.#time.pause = this.getTime()}
+    pause() {this.#timers.pause = this.getTime()}
 
     resume() {
-        this.#time.start = this.getTime() - (this.#time.pause - this.#time.start);
-        this.#time.pause = 0;
+        this.#timers.start = this.getTime() - (this.#timers.pause - this.#timers.start);
+        this.#timers.pause = 0;
         this.#append(this.#callbacks.resume);
     }
 
     stop() {
-        if (this.#time.pause > 0) {
-            this.#remove();
+        if (this.#timers.pause > 0) {
+            this.#remove(this.#callbacks.stop);
         } else {
-            this.#time.stop = this.getTime();
+            this.#timers.stop = this.getTime();
         }
     }
 
+
+    #open = () => {
+        this.#request('open', {}, (response) => {
+            this.#file.hash = response.hash;
+            this.#callbacks.start();
+            this.#append();
+        });
+    };
+
     #append = (callback = () => {}) => {
-        if (this.#time.pause > 0) {
+        if (this.#timers.pause > 0) {
             this.#speed = 0;
             this.#callbacks.pause();
             return;
         }
-        if (this.#time.stop > 0) {
+        if (this.#timers.stop > 0) {
             this.#remove();
             return;
         }
@@ -140,8 +158,8 @@ class Upload {
             } else {
                 this.#close();
             }
+            if (callback !== undefined) callback();
             this.#chunk.number ++;
-            callback();
         });
     };
 
@@ -149,18 +167,19 @@ class Upload {
         this.#request('close', {time: this.#file.lastModified}, (response) => {
             if (response.size !== this.#file.size)
                 this.#setError('Неправельний розмір завантаженого файлу');
-            this.#speed = this.getTime() - this.#time.start;
+            this.#speed = this.getTime() - this.#timers.start;
             this.#speed = Math.round(this.#chunk.offset / this.#speed);
-            this.#callbacks.done();
-            this.#callbacks.always();
+            this.#callbacks.upload.done();
+            this.#callbacks.upload.always();
         });
     };
 
-    #remove = () => {
-        this.#request('remove', {}, this.#callbacks.stop);
+    #remove = (callback = () => {}) => {
+        this.#request('remove', {}, callback);
     };
 
-    #request = (action, data = {}, callback = () => {}) => {
+
+    #request = (action, data = {}, callback) => {
         let params = {
             method: 'POST', url: this.#url + action, data: {...data},
             text: 'text', dataType: 'json', cache: false, timeout: this.#options.timeout * 1000};
@@ -181,7 +200,7 @@ class Upload {
             if (response.exception !== undefined) {
                 this.#setError(jqXHR.exception);
             } else {
-                callback(response);
+                if (callback !== null) callback(response);
             }
         }).fail((jqXHR) => {
             if (jqXHR.readyState === 4) {
@@ -194,13 +213,13 @@ class Upload {
             }
             this.#retry ++;
             if (this.#retry > this.#options.retry.limit) {
-                if (action !== 'open') this.#callbacks.timeout();
-                alert('Сервер не відповідає, спробуйте пізніше');
+                this.#callbacks.timeout();
+                this.#retry = 0;
                 return;
             }
-            console.warn('Повторний запит #' + this.#retry + ' / ' + Human.time(this.getTime()));
+console.log('Retry #' + this.#retry + ' / ' + human.time(this.getTime()));
             setTimeout(
-                () => {this.#request(action, data, (jqXHR) => {callback(jqXHR)})},
+                () => {this.#request(action, data, callback)},
                 this.#options.retry.interval * 1000);
         });
     }
