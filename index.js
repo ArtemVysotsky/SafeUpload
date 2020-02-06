@@ -10,7 +10,7 @@ $(document).ready(function() {
     let file, upload;
 
     // Збережені посилання на елементи сторінки
-    const nodes = new function() {
+    const nodes = new function () {
         const root = this;
         root.main = $('main');
         root.card = this.main.find('div.card');
@@ -36,25 +36,26 @@ $(document).ready(function() {
         };
     };
 
-    // Клас керування таймерами для оновлення інформації про процес завантаження файлу
-    let timer = new function() {
+    // Таймери для оновлення інформації про процес завантаження файлу
+    const timer = new function() {
         let timers = { // налаштування таймерів
             status: { // таймер для оновлення статусу завантаження файлу
-                id: null, // номер таймера оновляення статусу
-                interval: 1000, // інтервал оновляення статусу, мілісекунди
-                code: () => { // код оновляення статусу
-                let status = upload.getStatus();
-                nodes.indicators.speed.text(
-                    human.size(status.speed) + '/c' + ' (' + human.size(status.chunk) + ')'
-                );
-                nodes.indicators.time.text(
-                    human.time(status.time.elapsed) + ' / ' + human.time(status.time.estimate)
-                );
-            }},
+                id: null, // номер таймера
+                interval: 1000, // інтервал, мілісекунди
+                callback: () => {
+                    let status = upload.getStatus();
+                    nodes.indicators.speed.text(
+                        human.size(status.speed) + '/c' + ' (' + human.size(status.chunk) + ')'
+                    );
+                    nodes.indicators.time.text(
+                        human.time(status.time.elapsed) + ' / ' + human.time(status.time.estimate)
+                    );
+                }
+            },
             size: { // таймер оновлення розміру завантаження файлу
-                id: null, // номер таймера оновляення розміру
-                interval: 200, // інтервал оновляення розміру, мілісекунди
-                code: () => { // код оновляення розміру
+                id: null, // номер таймера
+                interval: 200, // інтервал, мілісекунди
+                callback: () => {
                 let size = upload.getSize();
                 let percent = Math.round(size * 100 / file.size);
                 nodes.indicators.progress.css('width',  percent + '%')
@@ -63,17 +64,21 @@ $(document).ready(function() {
         };
         this.start = () => {
             $.each(timers, function() {
-                this.id = setInterval(this.code, this.interval);
+                this.id = setInterval(this.callback, this.interval);
             });
         };
-        this.stop = () => {
+        this.stop = (timeout = true) => {
             $.each(timers, function() {
-                setTimeout(() => {clearInterval(this.id)}, this.interval);
+                if (timeout) {
+                    setTimeout(() => {clearInterval(this.id)}, this.interval);
+                } else {
+                    clearInterval(this.id);
+                }
             });
         }
     };
 
-    // Створюємо дії на різні випадки процесу завантаження файлу
+    // Дії на різні випадки процесу завантаження файлу
     const callbacks = {
         start: () => {
             nodes.buttons.file.disable();
@@ -99,9 +104,12 @@ $(document).ready(function() {
             nodes.buttons.cancel.disable();
             timer.stop();
         },
-        timeout: () => {
-            console.log('callbacks.timeout.fail');
-            callbacks.pause();
+        timeout: (action) => {
+            if (action === 'append') {
+                nodes.buttons.resume.enable();
+                nodes.buttons.pause.disable();
+                timer.stop(false);
+            }
             alert('Сервер не відповідає, спробуйте пізніше');
         },
         upload: {
@@ -142,12 +150,12 @@ $(document).ready(function() {
 });
 
 
-// Створення додаткових допоміжних функцій для завантаження файлу
+// Спрощення увімнення/вимкнення елементів форми
 $.fn.enable = function() {return this.prop('disabled', false)};
 $.fn.disable = function() {return this.prop('disabled', true)};
 
 
-// Клас для виводу розміру файлу та інтервалу часу в зручному для людині вигляді
+// Вивід розміру файлу та інтервалу часу в зручному для людині вигляді
 const human = new function() {
     this.size = function(bytes) {
         const thousand = 1000;

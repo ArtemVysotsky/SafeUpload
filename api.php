@@ -7,10 +7,6 @@
  * @copyright   GNU General Public License v3
  */
 
-//sleep(1);
-
-//if ($_GET['action'] == 'append') {sleep(10); exit(0);}
-
 set_error_handler('exceptionErrorHandler');
 
 $output = [];
