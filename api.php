@@ -27,11 +27,13 @@ try {
 
         case 'open': $output['hash'] = $file->open(); break;
 
-        case 'append': $output['size'] = $file->append($_FILES['chunk']); break;
+        case 'append': $output['size'] = $file->append($_FILES['chunk'], $_POST['offset']); break;
 
         case 'close': $output['size'] = $file->close(($_POST['time']) ?? null); break;
 
         case 'remove': $file->remove(); break;
+
+        case 'size': $output['size'] = $file->getSize(); break;
 
         default: throw new Exception('Невідома дія');
     }

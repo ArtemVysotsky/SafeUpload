@@ -31,7 +31,7 @@ class File {
     protected $hash;
 
     /** @var integer Максимальний розмір файла */
-    protected $size = 100 * 1024 * 1024;
+    protected $sizeMaximum = 100 * 1024 * 1024;
 
     /** @var boolean Ознака дозволу перезапису файлів з однаковою назвою */
     protected $overwrite = true;
@@ -120,9 +120,10 @@ class File {
      * Додає в тимчасовий файл надісланий шматок
      *
      * @param array $file Масив з даними завантаженого файлу шматка
+     * @param integer $offset Зміщення фрагмента файла відносно початку файла
      * @return integer Розмір тимчасового файла після запису шматка
      */
-    public function append(array $file): int {
+    public function append(array $file, int $offset): int {
 
         if ($file['error'] !== 0)
             throw new Exception('Помилка завантаження: ' . $this->errors[$file['error']]);
@@ -130,10 +131,12 @@ class File {
         if (!is_uploaded_file($file['tmp_name']))
             throw new Exception('Неправильно завантажений файл');
 
-        $size = filesize($this->sourceTemporary);
+        $size = $this->getSize();
 
-        if ($size > $this->size)
+        if ($size > $this->sizeMaximum)
             throw new Exception('Розмір файла перевищує допустимий');
+
+        if ($size != $offset) return $size;
 
         $chunk = file_get_contents($file['tmp_name']);
 
@@ -163,5 +166,14 @@ class File {
     public function remove(): void {
 
         if (file_exists($this->sourceTemporary)) unlink($this->sourceTemporary);
+    }
+
+    /**
+     * Повертає розмір файла
+     * @return integer Поточний розмір файла
+     */
+    public function getSize(): int {
+
+        return filesize($this->sourceTemporary);
     }
 }

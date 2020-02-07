@@ -43,7 +43,7 @@ $(document).ready(function() {
                 id: null, // номер таймера
                 interval: 1000, // інтервал, мілісекунди
                 callback: () => {
-                    let status = upload.getStatus();
+                    let status = upload.status;
                     nodes.indicators.speed.text(
                         human.size(status.speed) + '/c' + ' (' + human.size(status.chunk) + ')'
                     );
@@ -56,7 +56,7 @@ $(document).ready(function() {
                 id: null, // номер таймера
                 interval: 200, // інтервал, мілісекунди
                 callback: () => {
-                let size = upload.getSize();
+                let size = upload.size;
                 let percent = Math.round(size * 100 / file.size);
                 nodes.indicators.progress.css('width',  percent + '%')
                     .text(human.size(size) + ' (' + percent + '%)');
@@ -80,49 +80,28 @@ $(document).ready(function() {
 
     // Дії на різні випадки процесу завантаження файлу
     const callbacks = {
-        start: () => {
-            nodes.buttons.file.disable();
-            nodes.buttons.upload.disable();
-            nodes.buttons.pause.enable();
-            nodes.buttons.cancel.enable();
-            timer.start();
-        },
-        pause: () => {
-            nodes.buttons.resume.enable();
-            nodes.buttons.pause.disable();
-            timer.stop();
-        },
-        resume: () => {
-            nodes.buttons.pause.enable();
-            nodes.buttons.resume.disable();
-            timer.start();
-        },
-        stop: () => {
+        done: () => {
             nodes.buttons.file.enable();
             nodes.buttons.pause.disable();
             nodes.buttons.resume.disable();
             nodes.buttons.cancel.disable();
+            console.log('Файл "' + file.name + '" завантажено вдало');
             timer.stop();
         },
-        timeout: (action) => {
-            if (action === 'append') {
-                nodes.buttons.resume.enable();
-                nodes.buttons.pause.disable();
-                timer.stop(false);
-            }
-            alert('Сервер не відповідає, спробуйте пізніше');
+        fail: () => {
+            nodes.buttons.file.enable();
+            nodes.buttons.upload.disable();
+            nodes.buttons.pause.disable();
+            nodes.buttons.resume.disable();
+            nodes.buttons.cancel.disable();
+            alert(upload.message);
+            timer.stop();
         },
-        upload: {
-            done: () => {
-                console.log('Файл "' + file.name + '" завантажено вдало');
-            },
-            fail: () => {
-                nodes.buttons.upload.disable();
-                alert(upload.getMessage())
-            },
-            always: () => {
-                callbacks.stop();
-            }
+        timeout: () => {
+            nodes.buttons.resume.enable();
+            nodes.buttons.pause.disable();
+            timer.stop(); //false
+            alert('Сервер не відповідає, спробуйте пізніше');
         }
     };
 
@@ -139,21 +118,41 @@ $(document).ready(function() {
 
     // Дії при запуску процесу завантаження файлу
     nodes.buttons.upload.click(() => {
+        timer.start();
+        nodes.buttons.file.disable();
+        nodes.buttons.upload.disable();
+        nodes.buttons.pause.enable();
+        nodes.buttons.cancel.enable();
         upload = new Upload(file, callbacks);
         upload.start();
     });
 
     // Дії при призупиненні/продовжені/відміні процесу завантаження файлу
-    nodes.buttons.pause.click(() => {upload.pause()});
-    nodes.buttons.resume.click(() => {upload.resume()});
-    nodes.buttons.cancel.click(() => {upload.stop()});
+    nodes.buttons.pause.click(() => {
+        nodes.buttons.resume.enable();
+        nodes.buttons.pause.disable();
+        upload.pause();
+        timer.stop();
+    });
+    nodes.buttons.resume.click(() => {
+        timer.start();
+        nodes.buttons.pause.enable();
+        nodes.buttons.resume.disable();
+        upload.resume();
+    });
+    nodes.buttons.cancel.click(() => {
+        nodes.buttons.file.enable();
+        nodes.buttons.pause.disable();
+        nodes.buttons.resume.disable();
+        nodes.buttons.cancel.disable();
+        upload.stop();
+        timer.stop();
+    });
 });
-
 
 // Спрощення увімнення/вимкнення елементів форми
 $.fn.enable = function() {return this.prop('disabled', false)};
 $.fn.disable = function() {return this.prop('disabled', true)};
-
 
 // Вивід розміру файлу та інтервалу часу в зручному для людині вигляді
 const human = new function() {
