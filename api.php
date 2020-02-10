@@ -33,8 +33,6 @@ try {
 
         case 'remove': $file->remove(); break;
 
-        case 'size': $output['size'] = $file->getSize(); break;
-
         default: throw new Exception('Невідома дія');
     }
 

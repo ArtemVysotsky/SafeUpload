@@ -29,7 +29,6 @@ $(document).ready(function() {
             this.cancel = root.form.control.find('input.cancel');
         };
         root.indicators = new function() {
-            this.size = root.form.file.find('span');
             this.speed = root.form.status.find('span.speed');
             this.time = root.form.status.find('span.time');
             this.progress = root.form.progress.find('div.progress-bar');
@@ -85,7 +84,7 @@ $(document).ready(function() {
             nodes.buttons.pause.disable();
             nodes.buttons.resume.disable();
             nodes.buttons.cancel.disable();
-            console.log('Файл "' + file.name + '" завантажено вдало');
+            console.log('Файл "' + file.name + '" завантажено');
             timer.stop();
         },
         fail: () => {
@@ -110,7 +109,6 @@ $(document).ready(function() {
         file = $(this)[0].files[0];
         if (file === undefined) return false;
         nodes.buttons.upload.enable();
-        nodes.indicators.size.text('(' + human.size(file.size) + ')');
         nodes.indicators.speed.text('');
         nodes.indicators.time.text('');
         nodes.indicators.progress.css('width', 0).text(null);

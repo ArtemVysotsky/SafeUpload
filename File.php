@@ -131,7 +131,7 @@ class File {
         if (!is_uploaded_file($file['tmp_name']))
             throw new Exception('Неправильно завантажений файл');
 
-        $size = $this->getSize();
+        $size = filesize($this->sourceTemporary);
 
         if ($size > $this->sizeMaximum)
             throw new Exception('Розмір файла перевищує допустимий');
@@ -166,14 +166,5 @@ class File {
     public function remove(): void {
 
         if (file_exists($this->sourceTemporary)) unlink($this->sourceTemporary);
-    }
-
-    /**
-     * Повертає розмір файла
-     * @return integer Поточний розмір файла
-     */
-    public function getSize(): int {
-
-        return filesize($this->sourceTemporary);
     }
 }

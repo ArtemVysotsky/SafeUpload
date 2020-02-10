@@ -8,9 +8,10 @@
 <!DOCTYPE html>
 <html xml:lang="uk" lang="uk" dir="ltr">
     <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
         <title>Безпечне завантаження великих файлів</title>
-        <meta name="description" content="завантаження, безпечне завантаження, безпечне завантаження файлів, upload, safe upload, safe file upload">
+        <meta name="description" content="завантаження, безпечне завантаження, безпечне завантаження файлів, upload, safe upload, safe file upload" />
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1.0" />
         <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous" />
         <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=1">
         <style>
@@ -28,28 +29,26 @@
     </head>
     <body>
         <main class="container mt-5">
-            <div class="container">
-                <div class="card mx-auto mt-5">
-                    <div class="card-body">
-                        <h5 class="card-title">Безпечне завантаження великих файлів <sup>beta</sup></h5>
-                        <hr />
-                        <form>
-                            <div class="file mt-4"><input type="file" name="file" /><span></span></div>
-                            <div class="progress mt-4">
-                                <div class="progress-bar" role="progressbar" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
-                            </div>
-                            <div class="status small mt-2">
-                                <span class="speed" title="Швидкість завантаження (розмір частини файлу)"></span>
-                                <span class="time" title="Часу пройшло / лишилось"></span>
-                            </div>
-                            <div class="control mt-4">
-                                <input type="button" name="upload" value="Upload" disabled="disabled" class="btn btn-primary upload" />
-                                <input type="button" name="pause" value="Pause" disabled="disabled" class="btn btn-warning pause" />
-                                <input type="button" name="resume" value="Resume" disabled="disabled" class="btn btn-success resume" />
-                                <input type="button" name="cancel" value="Cancel" disabled="disabled" class="btn btn-danger cancel" />
-                            </div>
-                        </form>
-                    </div>
+            <div class="card mx-auto mt-5">
+                <div class="card-body">
+                    <h5 class="card-title">Безпечне завантаження файлів <sup>beta</sup></h5>
+                    <hr />
+                    <form>
+                        <div class="file mt-4"><input type="file" name="file" /></div>
+                        <div class="progress mt-4">
+                            <div class="progress-bar" role="progressbar" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <div class="status small mt-2">
+                            <span class="speed" title="Швидкість завантаження (розмір частини файлу)"></span>
+                            <span class="time" title="Часу пройшло / лишилось"></span>
+                        </div>
+                        <div class="control mt-4">
+                            <input type="button" name="upload" value="Upload" disabled="disabled" class="btn btn-primary upload" />
+                            <input type="button" name="pause" value="Pause" disabled="disabled" class="btn btn-warning pause" />
+                            <input type="button" name="resume" value="Resume" disabled="disabled" class="btn btn-success resume" />
+                            <input type="button" name="cancel" value="Cancel" disabled="disabled" class="btn btn-danger cancel" />
+                        </div>
+                    </form>
                 </div>
             </div>
         </main>
