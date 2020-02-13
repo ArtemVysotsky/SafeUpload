@@ -79,6 +79,30 @@ $(document).ready(function() {
 
     // Дії на різні випадки процесу завантаження файлу
     const callbacks = {
+        start: () => {
+            timer.start();
+            nodes.buttons.file.disable();
+            nodes.buttons.upload.disable();
+            nodes.buttons.pause.enable();
+            nodes.buttons.cancel.enable();
+        },
+        pause: () => {
+            nodes.buttons.resume.enable();
+            nodes.buttons.pause.disable();
+            timer.stop();
+        },
+        resume: () => {
+            timer.start();
+            nodes.buttons.pause.enable();
+            nodes.buttons.resume.disable();
+        },
+        stop: () => {
+            nodes.buttons.file.enable();
+            nodes.buttons.pause.disable();
+            nodes.buttons.resume.disable();
+            nodes.buttons.cancel.disable();
+            timer.stop();
+        },
         done: () => {
             nodes.buttons.file.enable();
             nodes.buttons.pause.disable();
@@ -99,7 +123,7 @@ $(document).ready(function() {
         timeout: () => {
             nodes.buttons.resume.enable();
             nodes.buttons.pause.disable();
-            timer.stop(); //false
+            timer.stop(false);
             alert('Сервер не відповідає, спробуйте пізніше');
         }
     };
@@ -114,38 +138,14 @@ $(document).ready(function() {
         nodes.indicators.progress.css('width', 0).text(null);
     });
 
-    // Дії при запуску процесу завантаження файлу
+    // Прописуемо реакції на різні дії користувача
     nodes.buttons.upload.click(() => {
-        timer.start();
-        nodes.buttons.file.disable();
-        nodes.buttons.upload.disable();
-        nodes.buttons.pause.enable();
-        nodes.buttons.cancel.enable();
         upload = new Upload(file, callbacks);
         upload.start();
     });
-
-    // Дії при призупиненні/продовжені/відміні процесу завантаження файлу
-    nodes.buttons.pause.click(() => {
-        nodes.buttons.resume.enable();
-        nodes.buttons.pause.disable();
-        upload.pause();
-        timer.stop();
-    });
-    nodes.buttons.resume.click(() => {
-        timer.start();
-        nodes.buttons.pause.enable();
-        nodes.buttons.resume.disable();
-        upload.resume();
-    });
-    nodes.buttons.cancel.click(() => {
-        nodes.buttons.file.enable();
-        nodes.buttons.pause.disable();
-        nodes.buttons.resume.disable();
-        nodes.buttons.cancel.disable();
-        upload.stop();
-        timer.stop();
-    });
+    nodes.buttons.pause.click(() => upload.pause());
+    nodes.buttons.resume.click(() => upload.resume());
+    nodes.buttons.cancel.click(() => upload.stop());
 });
 
 // Спрощення увімнення/вимкнення елементів форми

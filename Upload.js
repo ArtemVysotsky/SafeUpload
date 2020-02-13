@@ -47,7 +47,9 @@ class Upload {
     #retry = 0; // порядковий номер поточного повторного запиту
     #action = null; // поточна дія для запиту до сервера
     #message = null; // текст повідомлення (при наявності)
-    #callbacks = {done: () => {}, fail: () => {}, timeout: () => {}};
+    #callbacks = { //дії на різні випадки процесу завантаження файлу
+        start: () => {}, pause: () => {}, resume: () => {}, stop: () => {},
+        done: () => {}, fail: () => {}, timeout: () => {}};
 
     constructor(file, callbacks = {}) {
         this.#file = file;
@@ -84,7 +86,7 @@ class Upload {
 
     start() {
         this.#timers.start = this.time;
-        this.#open();
+        this.#open(this.#callbacks.start());
     }
 
     pause() {this.#timers.pause = this.time}
@@ -93,9 +95,9 @@ class Upload {
         this.#timers.start = this.time - (this.#timers.pause - this.#timers.start);
         this.#timers.pause = 0;
         switch (this.#action) {
-            case 'open': this.#open(); break;
-            case 'append': this.#append(); break;
-            case 'close': this.#close(); break;
+            case 'open': this.#open(this.#callbacks.resume()); break;
+            case 'append': this.#append(this.#callbacks.resume()); break;
+            case 'close': this.#close(this.#callbacks.resume()); break;
         }
     }
 
@@ -107,10 +109,11 @@ class Upload {
         }
     }
 
-    #open = () => {
+    #open = (callback = () => {}) => {
         this.#action = 'open';
         this.#request('open', {}, (response) => {
             this.#file.hash = response.hash;
+            callback();
             this.#append();
         });
     };
@@ -118,6 +121,7 @@ class Upload {
     #append = (callback = () => {}) => {
         this.#action = 'append';
         if (this.#timers.pause > 0) {
+            this.#callbacks.pause();
             this.#speed = 0;
             return;
         }
@@ -156,7 +160,7 @@ class Upload {
         });
     };
 
-    #close = () => {
+    #close = (callback = () => {}) => {
         this.#action = 'close';
         this.#request('close', {time: this.#file.lastModified}, (response) => {
             if (response.size !== this.#file.size)
@@ -164,10 +168,14 @@ class Upload {
             this.#speed = this.time - this.#timers.start;
             this.#speed = Math.round(this.#chunk.offset / this.#speed);
             this.#callbacks.done();
+            callback();
         });
     };
 
-    #remove = () => {this.#request('remove')};
+    #remove = () => {
+        this.#request('remove');
+        this.#callbacks.stop();
+    };
 
     #request = (action, data = {}, callback = () => {}) => {
         let params = {
@@ -199,9 +207,9 @@ class Upload {
             }
             this.#retry ++;
             if (this.#retry > this.#options.retry.limit) {
-                this.#callbacks.timeout(action);
                 this.#retry = 0;
                 this.pause();
+                this.#callbacks.timeout(action);
                 return;
             }
             console.warn('Повторний запит #' + this.#retry + ' / ' + human.time(this.time));
