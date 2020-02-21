@@ -7,6 +7,8 @@
  * @copyright   GNU General Public License v3
  */
 
+/** ToDo: Перевірити видалення файла при помилці */
+
 set_error_handler('exceptionErrorHandler');
 
 $output = [];
@@ -17,30 +19,45 @@ try {
 
     if (!isset($_GET['action'])) throw new Exception('Відсутня дія');
 
-    if (!isset($_POST['name'])) throw new Exception('Відсутня назва файлу');
+    if (!isset($_GET['name'])) throw new Exception('Відсутня назва файлу');
 
-    $file = new File($_POST['name']);
+    $file = new File($_GET['name']);
 
-    if (isset($_POST['hash'])) $file->setHash($_POST['hash']);
+    try {
 
-    switch($_GET['action']) {
+        if (isset($_POST['hash'])) $file->setHash($_POST['hash']);
 
-        case 'open': $output['hash'] = $file->open(); break;
+        switch($_GET['action']) {
 
-        case 'append': $output['size'] = $file->append($_FILES['chunk'], $_POST['offset']); break;
+            case 'open': $output['hash'] = $file->open(); break;
 
-        case 'close': $output['size'] = $file->close(($_POST['time']) ?? null); break;
+            case 'append': {
 
-        case 'remove': $file->remove(); break;
+                if ((count($_FILES) == 0) || (!isset($_FILES['chunk'])))
 
-        default: throw new Exception('Невідома дія');
+                    throw new Exception('Відсутній фрагмент файла');
+
+                $output['size'] = $file->append($_FILES['chunk'], $_POST['offset']);
+
+            } break;
+
+            case 'close': $output['size'] = $file->close($_POST['time'] ?? null); break;
+
+            case 'remove': $file->remove(); break;
+
+            default: throw new Exception('Невідома дія');
+        }
+
+    } catch (Exception $exception) {
+
+        $file->remove();
+
+        throw $exception;
     }
 
 } catch (Exception $exception) {
 
     header('HTTP/1.x 500 Internal Server Error');
-
-    if (isset($file) && is_object($file) && isset($_POST['hash'])) $file->remove();
 
     $output['exception'] = $exception->getMessage();
 }

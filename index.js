@@ -6,8 +6,11 @@
  * @copyright   GNU General Public License v3
  */
 
+/** ToDo: Перевірити код на доцільність використання JS-селекторів замість jQuery */
+/** ToDo: Перевірити перехоплення виключень */
+
 $(document).ready(function() {
-    let file, upload;
+    let upload;
 
     // Збережені посилання на елементи сторінки
     const nodes = new function () {
@@ -35,127 +38,94 @@ $(document).ready(function() {
         };
     };
 
-    // Таймери для оновлення інформації про процес завантаження файлу
-    const timer = new function() {
-        let timers = { // налаштування таймерів
-            status: { // таймер для оновлення статусу завантаження файлу
-                id: null, // номер таймера
-                interval: 1000, // інтервал, мілісекунди
-                callback: () => {
-                    let status = upload.status;
-                    nodes.indicators.speed.text(
-                        human.size(status.speed) + '/c' + ' (' + human.size(status.chunk) + ')'
-                    );
-                    nodes.indicators.time.text(
-                        human.time(status.time.elapsed) + ' / ' + human.time(status.time.estimate)
-                    );
-                }
-            },
-            size: { // таймер оновлення розміру завантаження файлу
-                id: null, // номер таймера
-                interval: 200, // інтервал, мілісекунди
-                callback: () => {
-                let size = upload.size;
-                let percent = Math.round(size * 100 / file.size);
-                nodes.indicators.progress.css('width',  percent + '%')
-                    .text(human.size(size) + ' (' + percent + '%)');
-            }}
-        };
-        this.start = () => {
-            $.each(timers, function() {
-                this.id = setInterval(this.callback, this.interval);
-            });
-        };
-        this.stop = (timeout = true) => {
-            $.each(timers, function() {
-                if (timeout) {
-                    setTimeout(() => {clearInterval(this.id)}, this.interval);
-                } else {
-                    clearInterval(this.id);
-                }
-            });
-        }
-    };
-
     // Дії на різні випадки процесу завантаження файлу
     const callbacks = {
-        start: () => {
-            timer.start();
-            nodes.buttons.file.disable();
-            nodes.buttons.upload.disable();
-            nodes.buttons.pause.enable();
-            nodes.buttons.cancel.enable();
+        resolve: () => {
+            nodes.buttons.file.enable();
+            nodes.buttons.pause.disable();
+            nodes.buttons.resume.disable();
+            nodes.buttons.cancel.disable();
+            console.log('Завантаження файла завершено');
         },
         pause: () => {
             nodes.buttons.resume.enable();
             nodes.buttons.pause.disable();
-            timer.stop();
         },
-        resume: () => {
-            timer.start();
-            nodes.buttons.pause.enable();
-            nodes.buttons.resume.disable();
-        },
-        stop: () => {
-            nodes.buttons.file.enable();
+        timeout: () => {
+            nodes.buttons.resume.enable();
             nodes.buttons.pause.disable();
-            nodes.buttons.resume.disable();
-            nodes.buttons.cancel.disable();
-            timer.stop();
+            alert('Сервер не відповідає, спробуйте пізніше');
         },
-        done: () => {
-            nodes.buttons.file.enable();
-            nodes.buttons.pause.disable();
-            nodes.buttons.resume.disable();
-            nodes.buttons.cancel.disable();
-            console.log('Файл "' + file.name + '" завантажено');
-            timer.stop();
-        },
-        fail: () => {
+        reject: () => {
             nodes.buttons.file.enable();
             nodes.buttons.upload.disable();
             nodes.buttons.pause.disable();
             nodes.buttons.resume.disable();
             nodes.buttons.cancel.disable();
             alert(upload.message);
-            timer.stop();
         },
-        timeout: () => {
-            nodes.buttons.resume.enable();
-            nodes.buttons.pause.disable();
-            timer.stop(false);
-            alert('Сервер не відповідає, спробуйте пізніше');
+        iteration: (status) => {
+            nodes.indicators.speed.text(
+                human.size(status.speed) + '/c' + ' (' + human.size(status.chunk) + ')'
+            );
+            nodes.indicators.time.text(
+                human.time(status.time.elapsed) + ' / ' + human.time(status.time.estimate)
+            );
+            nodes.indicators.progress.text(human.size(upload.size.bytes) + ' (' + upload.size.percent + '%)');
+            nodes.indicators.progress.css('width',  upload.size.percent + '%');
         }
     };
 
-    // Дії при виборі файлу користувачем
-    nodes.buttons.file.change(function() {
-        file = $(this)[0].files[0];
-        if (file === undefined) return false;
-        nodes.buttons.upload.enable();
-        nodes.indicators.speed.text('');
-        nodes.indicators.time.text('');
-        nodes.indicators.progress.css('width', 0).text(null);
-    });
+    try {
+        // Дії при виборі файлу користувачем
+        nodes.buttons.file.change(function() {
+            let file = $(this)[0].files[0];
+            if (file === undefined) return false;
+            if (file.size > (2 * 1024 * 1024 * 1024))
+                throw 'Розмір файлу більше допустимого';
+            upload = new Upload(file, callbacks);
+            nodes.buttons.upload.enable();
+            nodes.indicators.speed.text('');
+            nodes.indicators.time.text('');
+            nodes.indicators.progress.css('width', 0).text(null);
+        });
 
-    // Прописуемо реакції на різні дії користувача
-    nodes.buttons.upload.click(() => {
-        upload = new Upload(file, callbacks);
-        upload.start();
-    });
-    nodes.buttons.pause.click(() => upload.pause());
-    nodes.buttons.resume.click(() => upload.resume());
-    nodes.buttons.cancel.click(() => upload.stop());
+        // Прописуемо реакції на різні дії користувача
+        nodes.buttons.upload.click(async () => {
+            await upload.start();
+            nodes.buttons.file.disable();
+            nodes.buttons.upload.disable();
+            nodes.buttons.pause.enable();
+            nodes.buttons.cancel.enable();
+        });
+        nodes.buttons.pause.click(() => upload.pause());
+        nodes.buttons.resume.click(async () => {
+            await upload.resume();
+            nodes.buttons.pause.enable();
+            nodes.buttons.resume.disable();
+        });
+        nodes.buttons.cancel.click(async () => {
+            nodes.buttons.file.enable();
+            nodes.buttons.pause.disable();
+            nodes.buttons.resume.disable();
+            nodes.buttons.cancel.disable();
+            await upload.cancel();
+        });
+    } catch (e) {
+        alert(e.message);
+    }
 });
+
 
 // Спрощення увімнення/вимкнення елементів форми
 $.fn.enable = function() {return this.prop('disabled', false)};
 $.fn.disable = function() {return this.prop('disabled', true)};
 
+
 // Вивід розміру файлу та інтервалу часу в зручному для людині вигляді
 const human = new function() {
     this.size = function(bytes) {
-        const thousand = 1000;
+        const thousand = 1024;
         if(Math.abs(bytes) < thousand) return bytes + ' B';
         let i = -1;
         const units = ['КБ','МБ','ГБ'];

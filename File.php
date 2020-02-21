@@ -31,7 +31,7 @@ class File {
     protected $hash;
 
     /** @var integer Максимальний розмір файла */
-    protected $sizeMaximum = 100 * 1024 * 1024;
+    protected $sizeMaximum = 10 * 1024 * 1024 * 1024;
 
     /** @var boolean Ознака дозволу перезапису файлів з однаковою назвою */
     protected $overwrite = true;
@@ -39,13 +39,13 @@ class File {
     /** @var array Перелік кодів та опису помилок завантаження файлів */
     protected $errors = array(
 
-        UPLOAD_ERR_INI_SIZE     => 'Розмір зображення більший за допустимий в налаштуваннях сервера',
-        UPLOAD_ERR_FORM_SIZE    => 'Розмір зображення більший за значення MAX_FILE_SIZE, вказаний в HTML-формі',
-        UPLOAD_ERR_PARTIAL      => 'Зображення завантажено тільки частково',
-        UPLOAD_ERR_NO_FILE      => 'Зображення не завантажено',
+        UPLOAD_ERR_INI_SIZE     => 'Розмір фрагмента файла більший за допустимий в налаштуваннях сервера',
+        UPLOAD_ERR_FORM_SIZE    => 'Розмір фрагмента файла більший за значення MAX_FILE_SIZE, вказаний в HTML-формі',
+        UPLOAD_ERR_PARTIAL      => 'Фрагмент файла завантажено тільки частково',
+        UPLOAD_ERR_NO_FILE      => 'Фрагмент файла не завантажено',
         UPLOAD_ERR_NO_TMP_DIR   => 'Відсутня тимчасова тека',
-        UPLOAD_ERR_CANT_WRITE   => 'Не вдалось записати зображення на диск',
-        UPLOAD_ERR_EXTENSION    => 'Сервер зупинив завантаження зображення',
+        UPLOAD_ERR_CANT_WRITE   => 'Не вдалось записати фрагмент файла на диск',
+        UPLOAD_ERR_EXTENSION    => 'Сервер зупинив завантаження фрагмента файла',
     );
 
 
@@ -77,29 +77,23 @@ class File {
     /**
      * Перевіряє та зберігає хеш файла
      *
-     * @param string|null $hash Хеш файла
+     * @param string $hash Хеш файла
+     * @param boolean $check Ознака перевіки файл на наявність
      */
-    public function setHash($hash = null): void {
+    public function setHash(string $hash, bool $check = true): void {
 
-        if (isset($hash)) {
+        if (!preg_match('/^[0-9abcdef]{32}$/', $hash))
+            throw new Exception('Неправильний хеш файлу');
 
-            if (!preg_match('/^[0-9abcdef]{32}$/', $hash))
-                throw new Exception('Неправильний хеш файлу');
-
-            $this->hash = $hash;
-
-        } else {
-
-            $this->hash = bin2hex(random_bytes(16));
-        }
+        $this->hash = $hash;
 
         $this->nameTemporary = $this->name . '.' . $this->hash;
 
         $this->sourceTemporary =
             $this->pathTemporary . DIRECTORY_SEPARATOR . $this->nameTemporary;
 
-        if (isset($hash) && !file_exists($this->sourceTemporary))
-            throw new Exception('Файл не знайдено');
+        if ($check && !file_exists($this->sourceTemporary))
+            throw new Exception(sprintf('Файл "%s" не знайдено', $this->sourceTemporary));
     }
 
     /**
@@ -109,7 +103,7 @@ class File {
     */
     public function open(): string {
 
-        $this->setHash();
+        $this->setHash(bin2hex(random_bytes(16)), false);
 
         file_put_contents($this->sourceTemporary, null);
 
@@ -125,6 +119,9 @@ class File {
      */
     public function append(array $file, int $offset): int {
 
+        if (!isset($this->hash))
+            throw new Exception('Відсутній хеш файла');
+
         if ($file['error'] !== 0)
             throw new Exception('Помилка завантаження: ' . $this->errors[$file['error']]);
 
@@ -133,7 +130,7 @@ class File {
 
         $size = filesize($this->sourceTemporary);
 
-        if ($size > $this->sizeMaximum)
+        if (($size + $file['size']) > $this->sizeMaximum)
             throw new Exception('Розмір файла перевищує допустимий');
 
         if ($size != $offset) return $size;
@@ -148,14 +145,18 @@ class File {
     /**
      * Закриває тимчасовий файл (перетворює в постійний)
      *
-     * @param integer $time Час останньої модифікації файла
+     * @param integer|null $time Час останньої модифікації файла
      * @return integer Остаточний розмір файла
      */
-    public function close(int $time): int {
+    public function close(int $time = null): int {
+
+        if (!isset($this->hash))
+            throw new Exception('Відсутній хеш файла');
 
         rename($this->sourceTemporary, $this->source);
 
-        touch($this->source, round($time / 1000), time());
+        if (isset($time))
+            touch($this->source, round($time / 1000), time());
 
         return filesize($this->source);
     }
@@ -165,6 +166,10 @@ class File {
      */
     public function remove(): void {
 
-        if (file_exists($this->sourceTemporary)) unlink($this->sourceTemporary);
+        if (!isset($this->hash))
+            throw new Exception('Відсутній хеш файла');
+
+        if (file_exists($this->sourceTemporary))
+            unlink($this->sourceTemporary);
     }
 }
