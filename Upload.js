@@ -10,9 +10,10 @@
 /** @typedef {object} jqXHR.responseJSON **/
 
 class Upload {
-    #url = 'api.php?action='; // адреса API для завантаження файлу
+    #url = 'api.php'; // адреса API для завантаження файлу
     #options = {
-        size: {minimum: 1024, maximum: 20 * 1024 * 1024}, // максимальний розмір фрагмента файлу, байти
+        chunkSize: {minimum: 1024, maximum: 20 * 1024 * 1024}, // максимальний розмір фрагмента файлу, байти
+        fileSizeLimit: 2 * 1024 * 1024 * 1024, // максимальний розмір файлу, байти
         interval: 3, // максимальний рекомендований час тривалості запиту, секунди
         timeout: 20, // максимальний дозволений час тривалості запиту, секунди
         retry: { //
@@ -20,7 +21,7 @@ class Upload {
             interval: 1 // тривалість паузи між повторними запитами, секунди
         }
     };
-    #file = {
+    #file = { // об'єкт файлу
         name: null, // назва файлу
         size: null, // розмір файлу, байти
         hash: null, // хеш файлу
@@ -45,17 +46,24 @@ class Upload {
     #retry = 0; // порядковий номер поточного повторного запиту
     #action = null; // поточна дія для запиту до сервера
     #callbacks = {
-        resolve: () => {}, // дій при завершені процесу завантаження файла
+        iteration: () => {}, // дій після виконання кожного запита на сервер
         pause: () => {}, // дії при призупинені процесу завантаження файла
         timeout: () => {}, // дій при перевищенні обмеження для часу запиту
-        reject: () => {}, // дій при помилці процесу завантаження файла
-        iteration: () => {} // дій після виконання кожного запита на сервер
+        finish: () => {}, // дій при завершені процесу завантаження файла
     };
 
-    constructor(file, callbacks = {}) {
+    set file(file) {
+        if (file.size > this.#options.fileSizeLimit)
+            throw new Error('Розмір файлу більше дозволеного');
         this.#file = file;
-        this.#callbacks = callbacks;
     }
+
+    set callbacks(callbacks) {
+        if (callbacks.iteration !== undefined)  this.#callbacks.iteration = callbacks.iteration;
+        if (callbacks.pause !== undefined)      this.#callbacks.pause = callbacks.pause;
+        if (callbacks.timeout !== undefined)    this.#callbacks.timeout = callbacks.timeout;
+        if (callbacks.finish !== undefined)     this.#callbacks.finish = callbacks.finish;
+     }
 
     get time() {
         return Math.round(((new Date()).getTime() / 1000) - ((new Date()).getTimezoneOffset() * 60));
@@ -76,7 +84,9 @@ class Upload {
         }
         return status;
     };
+
     async start() {
+        if (!(this.#file instanceof File)) throw new Error('Відсутній файл');
         this.#timers.start = this.time;
         await this.#open();
     }
@@ -103,7 +113,7 @@ class Upload {
 
     #open = async () => {
         this.#action = 'open';
-        this.#chunk.size.base = this.#options.size.minimum;
+        this.#chunk.size.base = this.#options.chunkSize.minimum;
         const response = await this.#request('open');
         this.#file.hash = response.hash;
         this.#append();
@@ -123,18 +133,18 @@ class Upload {
         this.#chunk.number ++;
         this.#chunk.size.value = this.#chunk.size.base * this.#chunk.size.multiplier;
         let chunk = this.#file.slice(this.#chunk.offset, this.#chunk.offset + this.#chunk.size.value);
-        let formData = new FormData();
-        formData.append('hash', this.#file.hash);
-        formData.append('offset', this.#chunk.offset);
-        formData.append('chunk', chunk, this.#file.name);
+        let data = new FormData();
+        data.append('hash', this.#file.hash);
+        data.append('offset', this.#chunk.offset);
+        data.append('chunk', chunk, this.#file.name);
         let timestamp = (new Date()).getTime();
-        const response = await this.#request('append', formData);
+        const response = await this.#request('append', data);
         this.#chunk.offset = response.size;
         this.#sizing(timestamp);
         if (this.#chunk.offset < this.#file.size) {
-            await this.#append();
+            this.#append();
         } else {
-            await this.#close();
+            this.#close();
         }
     };
 
@@ -145,10 +155,10 @@ class Upload {
         data.append('hash', this.#file.hash);
         const response = await this.#request('close', data);
         if (response.size !== this.#file.size)
-            throw 'Неправельний розмір завантаженого файлу';
+            throw new Error('Неправельний розмір завантаженого файлу');
         this.#speed = Math.round(this.#file.size / (this.time - this.#timers.start));
         this.#chunk.size.value = Math.round(this.#file.size / this.#chunk.number);
-        await this.#callbacks.resolve();
+        await this.#callbacks.finish();
     };
 
     #remove = async () => {
@@ -159,7 +169,7 @@ class Upload {
 
     #request = async (action, data = new FormData()) => {
         let response = {};
-        const url = this.#url + action + '&name=' + this.#file.name;
+        const url = this.#url + '?action=' + action + '&name=' + this.#file.name;
         try {
             response = await fetch(url, {method: 'POST', body: data});
         } catch (e) {
@@ -168,7 +178,7 @@ class Upload {
             if (this.#retry > this.#options.retry.limit) {
                 this.#retry = 0;
                 this.#chunk.size.multiplier = 1;
-                this.#chunk.size.base = this.#options.size.minimum;
+                this.#chunk.size.base = this.#options.chunkSize.minimum;
                 this.pause();
                 this.#callbacks.timeout(action);
                 return;
@@ -189,10 +199,10 @@ class Upload {
         if (response.ok) {
             return responseJSON;
         } else {
-            this.#callbacks.reject();
-            if ((response.status === 500) && (responseJSON.exception !== undefined))
-                console.error(response.statusText + ': ' + responseJSON.exception);
-            throw 'Під час виконання запиту "' + action + '" виникла помилка';
+            const message = ((response.status === 500) && (responseJSON.exception !== undefined))
+                ? response.statusText + ': ' + responseJSON.exception
+                : 'Під час виконання запиту "' + action + '" виникла помилка';
+            throw new Error(message);
         }
     };
 
@@ -200,13 +210,13 @@ class Upload {
         let interval = ((new Date()).getTime() - timestamp) / 1000;
 
         let speed = Math.round(this.#chunk.size.value / interval);
-        console.log(this.#chunk.number, this.#chunk.size, human.size(speed)+'/с', interval);
+//console.log(this.#chunk.number, this.#chunk.size, human.size(speed)+'/с', interval);
 
         if (this.#chunk.size.multiplier === 2) {
             if ((interval < this.#options.interval) && (speed > this.#speed)) {
-                if ((this.#chunk.size.base * 2) < this.#options.size.maximum) this.#chunk.size.base *= 2;
+                if ((this.#chunk.size.base * 2) < this.#options.chunkSize.maximum) this.#chunk.size.base *= 2;
             } else {
-                if ((this.#chunk.size.base / 2) > this.#options.size.minimum) this.#chunk.size.base /= 2;
+                if ((this.#chunk.size.base / 2) > this.#options.chunkSize.minimum) this.#chunk.size.base /= 2;
             }
         }
 

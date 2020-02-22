@@ -6,123 +6,108 @@
  * @copyright   GNU General Public License v3
  */
 
-/** ToDo: Перевірити код на доцільність використання JS-селекторів замість jQuery */
 /** ToDo: Перевірити перехоплення виключень */
 
-$(document).ready(function() {
-    let upload;
+/* Збережені посилання на елементи сторінки */
+const nodes = {};
+nodes.form = {};
+nodes.form.self = document.querySelector('main form');
+nodes.form.file = nodes.form.self.querySelector('div.file');
+nodes.form.progress = nodes.form.self.querySelector('div.progress');
+nodes.form.control = nodes.form.self.querySelector('div.control');
+nodes.form.status = nodes.form.self.querySelector('div.status');
+nodes.buttons = {};
+nodes.buttons.file = nodes.form.file.querySelector('input');
+nodes.buttons.upload = nodes.form.control.querySelector('input.upload');
+nodes.buttons.pause = nodes.form.control.querySelector('input.pause');
+nodes.buttons.resume = nodes.form.control.querySelector('input.resume');
+nodes.buttons.cancel = nodes.form.control.querySelector('input.cancel');
+nodes.indicators = {};
+nodes.indicators.speed = nodes.form.status.querySelector('span.speed');
+nodes.indicators.time = nodes.form.status.querySelector('span.time');
+nodes.indicators.progress = nodes.form.progress.querySelector('div.progress-bar');
 
-    // Збережені посилання на елементи сторінки
-    const nodes = new function () {
-        const root = this;
-        root.main = $('main');
-        root.card = this.main.find('div.card');
-        root.form = new function() {
-            this.self = root.card.find('div.card-body form');
-            this.file = this.self.find('div.file');
-            this.progress = this.self.find('div.progress');
-            this.control = this.self.find('div.control');
-            this.status = this.self.find('div.status');
-        };
-        root.buttons = new function() {
-            this.file = root.form.file.find('input');
-            this.upload = root.form.control.find('input.upload');
-            this.pause = root.form.control.find('input.pause');
-            this.resume = root.form.control.find('input.resume');
-            this.cancel = root.form.control.find('input.cancel');
-        };
-        root.indicators = new function() {
-            this.speed = root.form.status.find('span.speed');
-            this.time = root.form.status.find('span.time');
-            this.progress = root.form.progress.find('div.progress-bar');
-        };
-    };
+/* Створюємо об'єкт для керування процесом завантаження файла */
+const upload = new Upload();
 
-    // Дії на різні випадки процесу завантаження файлу
-    const callbacks = {
-        resolve: () => {
-            nodes.buttons.file.enable();
-            nodes.buttons.pause.disable();
-            nodes.buttons.resume.disable();
-            nodes.buttons.cancel.disable();
-            console.log('Завантаження файла завершено');
-        },
-        pause: () => {
-            nodes.buttons.resume.enable();
-            nodes.buttons.pause.disable();
-        },
-        timeout: () => {
-            nodes.buttons.resume.enable();
-            nodes.buttons.pause.disable();
-            alert('Сервер не відповідає, спробуйте пізніше');
-        },
-        reject: () => {
-            nodes.buttons.file.enable();
-            nodes.buttons.upload.disable();
-            nodes.buttons.pause.disable();
-            nodes.buttons.resume.disable();
-            nodes.buttons.cancel.disable();
-            alert(upload.message);
-        },
-        iteration: (status) => {
-            nodes.indicators.speed.text(
-                human.size(status.speed) + '/c' + ' (' + human.size(status.chunk) + ')'
-            );
-            nodes.indicators.time.text(
-                human.time(status.time.elapsed) + ' / ' + human.time(status.time.estimate)
-            );
-            nodes.indicators.progress.text(human.size(upload.size.bytes) + ' (' + upload.size.percent + '%)');
-            nodes.indicators.progress.css('width',  upload.size.percent + '%');
-        }
-    };
-
-    try {
-        // Дії при виборі файлу користувачем
-        nodes.buttons.file.change(function() {
-            let file = $(this)[0].files[0];
-            if (file === undefined) return false;
-            if (file.size > (2 * 1024 * 1024 * 1024))
-                throw 'Розмір файлу більше допустимого';
-            upload = new Upload(file, callbacks);
-            nodes.buttons.upload.enable();
-            nodes.indicators.speed.text('');
-            nodes.indicators.time.text('');
-            nodes.indicators.progress.css('width', 0).text(null);
-        });
-
-        // Прописуемо реакції на різні дії користувача
-        nodes.buttons.upload.click(async () => {
-            await upload.start();
-            nodes.buttons.file.disable();
-            nodes.buttons.upload.disable();
-            nodes.buttons.pause.enable();
-            nodes.buttons.cancel.enable();
-        });
-        nodes.buttons.pause.click(() => upload.pause());
-        nodes.buttons.resume.click(async () => {
-            await upload.resume();
-            nodes.buttons.pause.enable();
-            nodes.buttons.resume.disable();
-        });
-        nodes.buttons.cancel.click(async () => {
-            nodes.buttons.file.enable();
-            nodes.buttons.pause.disable();
-            nodes.buttons.resume.disable();
-            nodes.buttons.cancel.disable();
-            await upload.cancel();
-        });
-    } catch (e) {
-        alert(e.message);
+upload.callbacks = {
+    iteration: (status) => {
+        nodes.indicators.speed.innerHTML = human.size(status.speed) + '/c' + ' (' + human.size(status.chunk) + ')';
+        nodes.indicators.time.innerHTML = human.time(status.time.elapsed) + ' / ' + human.time(status.time.estimate);
+        nodes.indicators.progress.innerHTML = human.size(upload.size.bytes) + ' (' + upload.size.percent + '%)';
+        nodes.indicators.progress.style.width = upload.size.percent + '%';
+    },
+    pause: () => {
+        nodes.buttons.resume.disabled = false;
+        nodes.buttons.pause.disabled = true;
+    },
+    timeout: () => {
+        nodes.buttons.resume.disabled = false;
+        nodes.buttons.pause.disabled = true;
+        alert('Сервер не відповідає, спробуйте пізніше');
+    },
+    finish: () => {
+        nodes.buttons.file.disabled = false;
+        nodes.buttons.pause.disabled = true;
+        nodes.buttons.resume.disabled = true;
+        nodes.buttons.cancel.disabled = true;
+        console.log('Завантаження файла завершено');
     }
+ };
+
+/* Дії при виборі файлу користувачем */
+nodes.buttons.file.addEventListener('change', function() {
+    try {
+        if (this.files[0] === undefined) return false;
+        upload.file = this.files[0];
+        nodes.buttons.upload.disabled = false;
+        nodes.indicators.speed.innerHTML = null;
+        nodes.indicators.time.innerHTML = null;
+        nodes.indicators.progress.style.width = '0';
+        nodes.indicators.progress.innerHTML = null;
+    } catch (e) {error(e)}
 });
 
+/* Додаємо реакції на різні дії користувача */
+nodes.buttons.upload.addEventListener('click', async () => {
+    try {
+        await upload.start();
+        nodes.buttons.file.disabled = true;
+        nodes.buttons.upload.disabled = true;
+        nodes.buttons.pause.disabled = false;
+        nodes.buttons.cancel.disabled = false;
+    } catch (e) {error(e)}
+});
+nodes.buttons.pause.addEventListener('click', () => upload.pause());
+nodes.buttons.resume.addEventListener('click', async () => {
+    try {
+        await upload.resume();
+        nodes.buttons.pause.disabled = false;
+        nodes.buttons.resume.disabled = true;
+    } catch (e) {error(e)}
+});
+nodes.buttons.cancel.addEventListener('click', async () => {
+    try {
+        nodes.buttons.file.disabled = false;
+        nodes.buttons.pause.disabled = true;
+        nodes.buttons.resume.disabled = true;
+        nodes.buttons.cancel.disabled = true;
+        await upload.cancel();
+    } catch (e) {error(e)}
+});
 
-// Спрощення увімнення/вимкнення елементів форми
-$.fn.enable = function() {return this.prop('disabled', false)};
-$.fn.disable = function() {return this.prop('disabled', true)};
+/* Функція для виводу помилки при асинхронних викликах */
+const error = (e) => {
+    nodes.buttons.file.disabled = false;
+    nodes.buttons.upload.disabled = true;
+    nodes.buttons.pause.disabled = true;
+    nodes.buttons.resume.disabled = true;
+    nodes.buttons.cancel.disabled = true;
+    console.error(e);
+    alert('Помилка: ' + e.message);
+};
 
-
-// Вивід розміру файлу та інтервалу часу в зручному для людині вигляді
+/* Вивід розміру файлу та інтервалу часу в зручному для людині вигляді */
 const human = new function() {
     this.size = function(bytes) {
         const thousand = 1024;
