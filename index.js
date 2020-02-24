@@ -6,7 +6,7 @@
  * @copyright   GNU General Public License v3
  */
 
-/** ToDo: Перевірити перехоплення виключень */
+let upload;
 
 /* Збережені посилання на елементи сторінки */
 const nodes = {};
@@ -27,39 +27,38 @@ nodes.indicators.speed = nodes.form.status.querySelector('span.speed');
 nodes.indicators.time = nodes.form.status.querySelector('span.time');
 nodes.indicators.progress = nodes.form.progress.querySelector('div.progress-bar');
 
-/* Створюємо об'єкт для керування процесом завантаження файла */
-const upload = new Upload();
-
-upload.callbacks = {
-    iteration: (status) => {
-        nodes.indicators.speed.innerHTML = human.size(status.speed) + '/c' + ' (' + human.size(status.chunk) + ')';
-        nodes.indicators.time.innerHTML = human.time(status.time.elapsed) + ' / ' + human.time(status.time.estimate);
-        nodes.indicators.progress.innerHTML = human.size(upload.size.bytes) + ' (' + upload.size.percent + '%)';
-        nodes.indicators.progress.style.width = upload.size.percent + '%';
-    },
-    pause: () => {
-        nodes.buttons.resume.disabled = false;
-        nodes.buttons.pause.disabled = true;
-    },
-    timeout: () => {
-        nodes.buttons.resume.disabled = false;
-        nodes.buttons.pause.disabled = true;
-        alert('Сервер не відповідає, спробуйте пізніше');
-    },
-    finish: () => {
-        nodes.buttons.file.disabled = false;
-        nodes.buttons.pause.disabled = true;
-        nodes.buttons.resume.disabled = true;
-        nodes.buttons.cancel.disabled = true;
-        console.log('Завантаження файла завершено');
-    }
- };
-
-/* Дії при виборі файлу користувачем */
+/* Додаємо реакції на різні дії користувача */
 nodes.buttons.file.addEventListener('change', function() {
     try {
         if (this.files[0] === undefined) return false;
-        upload.file = this.files[0];
+        upload = new Upload(this.files[0], {
+            iteration: (status) => { // дії при кожній ітерації процесу завантаження файла
+                nodes.indicators.speed.innerHTML
+                    = human.size(status.speed) + '/c' + ' (' + human.size(status.chunk) + ')';
+                nodes.indicators.time.innerHTML
+                    = human.time(status.time.elapsed) + ' / ' + human.time(status.time.estimate);
+                nodes.indicators.progress.innerHTML
+                    = human.size(upload.size.bytes) + ' (' + upload.size.percent + '%)';
+                nodes.indicators.progress.style.width
+                    = upload.size.percent + '%';
+            },
+            pause: () => { // дії при призупиненні процесу завантаження файла
+                nodes.buttons.resume.disabled = false;
+                nodes.buttons.pause.disabled = true;
+            },
+            resolve: () => { // дії при закінчені процесу завантаження файла
+                nodes.buttons.file.disabled = false;
+                nodes.buttons.pause.disabled = true;
+                nodes.buttons.resume.disabled = true;
+                nodes.buttons.cancel.disabled = true;
+                console.log('Завантаження файла завершено');
+            },
+            reject: () => { // дії при відсутності відповіді від сервера
+                nodes.buttons.resume.disabled = false;
+                nodes.buttons.pause.disabled = true;
+                alert('Сервер не відповідає, спробуйте пізніше');
+            }
+        });
         nodes.buttons.upload.disabled = false;
         nodes.indicators.speed.innerHTML = null;
         nodes.indicators.time.innerHTML = null;
@@ -67,8 +66,6 @@ nodes.buttons.file.addEventListener('change', function() {
         nodes.indicators.progress.innerHTML = null;
     } catch (e) {error(e)}
 });
-
-/* Додаємо реакції на різні дії користувача */
 nodes.buttons.upload.addEventListener('click', async () => {
     try {
         await upload.start();
@@ -96,7 +93,7 @@ nodes.buttons.cancel.addEventListener('click', async () => {
     } catch (e) {error(e)}
 });
 
-/* Функція для виводу помилки при асинхронних викликах */
+/* Вивід помилки при асинхронних викликах */
 const error = (e) => {
     nodes.buttons.file.disabled = false;
     nodes.buttons.upload.disabled = true;

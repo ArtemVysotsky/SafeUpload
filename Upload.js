@@ -9,13 +9,17 @@
 /** @typedef {object} jqXHR **/
 /** @typedef {object} jqXHR.responseJSON **/
 
+/** ToDo: Відрефакторити */
+
 class Upload {
     #url = 'api.php'; // адреса API для завантаження файлу
     #options = {
-        chunkSize: {minimum: 1024, maximum: 20 * 1024 * 1024}, // максимальний розмір фрагмента файлу, байти
+        chunkSize: {
+            minimum: 1024,  // мінімальний розмір фрагмента файлу, байти
+            maximum: 20 * 1024 * 1024 // максимальний розмір фрагмента файлу, байти
+        },
         fileSizeLimit: 2 * 1024 * 1024 * 1024, // максимальний розмір файлу, байти
         interval: 3, // максимальний рекомендований час тривалості запиту, секунди
-        timeout: 20, // максимальний дозволений час тривалості запиту, секунди
         retry: { //
             limit: 3, // максимальна кількість повторних запитів
             interval: 1 // тривалість паузи між повторними запитами, секунди
@@ -44,41 +48,40 @@ class Upload {
     };
     #speed = 0; // швидкість завантаження останнього фрагмента файлу, байти/с
     #retry = 0; // порядковий номер поточного повторного запиту
-    #action = null; // поточна дія для запиту до сервера
+    #action; // поточна дія для запиту до сервера
     #callbacks = {
         iteration: () => {}, // дій після виконання кожного запита на сервер
         pause: () => {}, // дії при призупинені процесу завантаження файла
-        timeout: () => {}, // дій при перевищенні обмеження для часу запиту
-        finish: () => {}, // дій при завершені процесу завантаження файла
+        resolve: () => {}, // дій при завершені процесу завантаження файла
+        reject: () => {} // дії при відсутності відповіді від сервера
     };
 
-    set file(file) {
+    constructor(file, callbacks = {}) {
         if (file.size > this.#options.fileSizeLimit)
             throw new Error('Розмір файлу більше дозволеного');
         this.#file = file;
+        this.#callbacks = {...callbacks};
     }
-
-    set callbacks(callbacks) {
-        if (callbacks.iteration !== undefined)  this.#callbacks.iteration = callbacks.iteration;
-        if (callbacks.pause !== undefined)      this.#callbacks.pause = callbacks.pause;
-        if (callbacks.timeout !== undefined)    this.#callbacks.timeout = callbacks.timeout;
-        if (callbacks.finish !== undefined)     this.#callbacks.finish = callbacks.finish;
-     }
 
     get time() {
         return Math.round(((new Date()).getTime() / 1000) - ((new Date()).getTimezoneOffset() * 60));
     }
 
     get size() {
-        return {bytes: this.#chunk.offset, percent: Math.round(this.#chunk.offset * 100 / this.#file.size)};
+        return {
+            bytes: this.#chunk.offset,
+            percent: Math.round(this.#chunk.offset * 100 / this.#file.size)
+        };
     }
 
     get status() {
         let status = {chunk: this.#chunk.size.value, speed: this.#speed, time: {}};
         status.time.elapsed = Math.round(this.time - this.#timers.start);
         if (this.#speed > 0) {
-            status.time.estimate = this.#file.size / (this.#chunk.offset / status.time.elapsed);
-            status.time.estimate = Math.round(status.time.estimate - status.time.elapsed);
+            status.time.estimate
+                = this.#file.size / (this.#chunk.offset / status.time.elapsed);
+            status.time.estimate
+                = Math.round(status.time.estimate - status.time.elapsed);
         } else {
             status.time.estimate = 0;
         }
@@ -86,7 +89,8 @@ class Upload {
     };
 
     async start() {
-        if (!(this.#file instanceof File)) throw new Error('Відсутній файл');
+        if (!(this.#file instanceof File))
+            throw new Error('Відсутній файл');
         this.#timers.start = this.time;
         await this.#open();
     }
@@ -121,18 +125,11 @@ class Upload {
 
     #append = async () => {
         this.#action = 'append';
-        if (this.#timers.pause > 0) {
-            this.#callbacks.pause();
-            this.#speed = 0;
-            return;
-        }
-        if (this.#timers.stop > 0) {
-            this.#remove();
-            return;
-        }
         this.#chunk.number ++;
-        this.#chunk.size.value = this.#chunk.size.base * this.#chunk.size.multiplier;
-        let chunk = this.#file.slice(this.#chunk.offset, this.#chunk.offset + this.#chunk.size.value);
+        this.#chunk.size.value =
+            this.#chunk.size.base * this.#chunk.size.multiplier;
+        let chunk =
+            this.#file.slice(this.#chunk.offset, this.#chunk.offset + this.#chunk.size.value);
         let data = new FormData();
         data.append('hash', this.#file.hash);
         data.append('offset', this.#chunk.offset);
@@ -158,7 +155,7 @@ class Upload {
             throw new Error('Неправельний розмір завантаженого файлу');
         this.#speed = Math.round(this.#file.size / (this.time - this.#timers.start));
         this.#chunk.size.value = Math.round(this.#file.size / this.#chunk.number);
-        await this.#callbacks.finish();
+        await this.#callbacks.resolve();
     };
 
     #remove = async () => {
@@ -168,20 +165,32 @@ class Upload {
     };
 
     #request = async (action, data = new FormData()) => {
+        if (this.#timers.pause > 0) {
+            this.#callbacks.pause();
+            this.#speed = 0;
+            return;
+        }
+        if (this.#timers.stop > 0) {
+            this.#remove();
+            return;
+        }
         let response = {};
         const url = this.#url + '?action=' + action + '&name=' + this.#file.name;
         try {
             response = await fetch(url, {method: 'POST', body: data});
         } catch (e) {
             this.#retry ++;
-            this.#chunk.size.base /= 2;
-            if (this.#retry > this.#options.retry.limit) {
-                this.#retry = 0;
-                this.#chunk.size.multiplier = 1;
-                this.#chunk.size.base = this.#options.chunkSize.minimum;
-                this.pause();
-                this.#callbacks.timeout(action);
-                return;
+            if (action === 'append') {
+                if ((this.#chunk.size.base / 2) > this.#options.chunkSize.minimum)
+                    this.#chunk.size.base /= 2;
+                if (this.#retry > this.#options.retry.limit) {
+                    this.#retry = 0;
+                    this.#chunk.size.multiplier = 1;
+                    this.#chunk.size.base = this.#options.chunkSize.minimum;
+                    this.pause();
+                    this.#callbacks.reject(action);
+                    return;
+                }
             }
             console.warn('Повторний запит #' + this.#retry + ' / ' + human.time(this.time));
             setTimeout(
@@ -214,9 +223,11 @@ class Upload {
 
         if (this.#chunk.size.multiplier === 2) {
             if ((interval < this.#options.interval) && (speed > this.#speed)) {
-                if ((this.#chunk.size.base * 2) < this.#options.chunkSize.maximum) this.#chunk.size.base *= 2;
+                if ((this.#chunk.size.base * 2) < this.#options.chunkSize.maximum)
+                    this.#chunk.size.base *= 2;
             } else {
-                if ((this.#chunk.size.base / 2) > this.#options.chunkSize.minimum) this.#chunk.size.base /= 2;
+                if ((this.#chunk.size.base / 2) > this.#options.chunkSize.minimum)
+                    this.#chunk.size.base /= 2;
             }
         }
 
