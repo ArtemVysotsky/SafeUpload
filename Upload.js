@@ -1,5 +1,5 @@
 /**
- * Клас для роботи з завантаженням файла
+ * Клас для роботи з завантаженням файлу
  *
  * @author      Артем Висоцький <a.vysotsky@gmail.com>
  * @link        https://github.com/ArtemVysotsky/Upload
@@ -9,50 +9,47 @@
 /** @typedef {object} jqXHR **/
 /** @typedef {object} jqXHR.responseJSON **/
 
-/** ToDo: Відрефакторити */
+/** ToDo: Вдосконалити алгоритм визначення оптимального розміру фрагмента (за 1 секунду) */
+/** ToDo: Перевірити роботу відновлення завантаження */
+/** ToDo: Відрефакторити код */
 
 class Upload {
-    #url = 'api.php'; // адреса API для завантаження файлу
     #options = {
+        url: 'api.php', // адреса API для завантаження файлу
         chunkSize: {
             minimum: 1024,  // мінімальний розмір фрагмента файлу, байти
             maximum: 20 * 1024 * 1024 // максимальний розмір фрагмента файлу, байти
         },
         fileSizeLimit: 2 * 1024 * 1024 * 1024, // максимальний розмір файлу, байти
-        interval: 3, // максимальний рекомендований час тривалості запиту, секунди
-        retry: { //
+        interval: 1, // максимальний рекомендований час тривалості запиту, секунди
+        retry: {
             limit: 3, // максимальна кількість повторних запитів
             interval: 1 // тривалість паузи між повторними запитами, секунди
         }
     };
-    #file = { // об'єкт файлу
-        name: null, // назва файлу
-        size: null, // розмір файлу, байти
-        hash: null, // хеш файлу
-        lastModified: null, // дата файлу
-    };
-    #chunk = { // поточна частина файлу
+    #file; // об'єкт файлу
+    #hash; // тимчасовий хеш файлу
+    #chunk = {
         number: 0, // порядковий номер фрагмента файлу
         offset: 0, // зміщення від початку файлу, байти
         size: {
             base: 0, // розмір бази фрагмента файлу, байти
             value: 0, // поточний розмір фрагмента файлу, байти
-            multiplier: 1 // коефіцієнт для визначення поточного розміру фрагмента файла (1|2)
+            multiplier: 1 // коефіцієнт для визначення поточного розміру фрагмента файлу (1|2)
         },
+        speed: 0 // швидкість виконання запиту, байти/с
     };
-    #timers = { // часові мітки
+    #action; // тип запиту
+    #timers = {
         start: 0, // час початку завантаження, секунди
         pause: 0, // час призупинки завантаження, секунди
         stop: 0, // час зупинки завантаження, секунди
-        status: 0 // час попереднього запиту індикаторів процесу завантаження файла, секунди
+        status: 0 // час попереднього запиту індикаторів процесу завантаження файлу, секунди
     };
-    #speed = 0; // швидкість завантаження останнього фрагмента файлу, байти/с
-    #retry = 0; // порядковий номер поточного повторного запиту
-    #action; // поточна дія для запиту до сервера
     #callbacks = {
         iteration: () => {}, // дій після виконання кожного запита на сервер
-        pause: () => {}, // дії при призупинені процесу завантаження файла
-        resolve: () => {}, // дій при завершені процесу завантаження файла
+        pause: () => {}, // дії при призупинені процесу завантаження файлу
+        resolve: () => {}, // дій при завершені процесу завантаження файлу
         reject: () => {} // дії при відсутності відповіді від сервера
     };
 
@@ -63,47 +60,21 @@ class Upload {
         this.#callbacks = {...callbacks};
     }
 
-    get time() {
-        return Math.round(((new Date()).getTime() / 1000) - ((new Date()).getTimezoneOffset() * 60));
-    }
-
-    get size() {
-        return {
-            bytes: this.#chunk.offset,
-            percent: Math.round(this.#chunk.offset * 100 / this.#file.size)
-        };
-    }
-
-    get status() {
-        let status = {chunk: this.#chunk.size.value, speed: this.#speed, time: {}};
-        status.time.elapsed = Math.round(this.time - this.#timers.start);
-        if (this.#speed > 0) {
-            status.time.estimate
-                = this.#file.size / (this.#chunk.offset / status.time.elapsed);
-            status.time.estimate
-                = Math.round(status.time.estimate - status.time.elapsed);
-        } else {
-            status.time.estimate = 0;
-        }
-        return status;
-    };
-
     async start() {
-        if (!(this.#file instanceof File))
-            throw new Error('Відсутній файл');
-        this.#timers.start = this.time;
+        this.#timers.start = this.#getTime();
         await this.#open();
     }
 
-    pause() {this.#timers.pause = this.time}
+    pause() {this.#timers.pause = this.#getTime()}
 
     async resume() {
-        this.#timers.start = this.time - (this.#timers.pause - this.#timers.start);
+        this.#timers.start =
+            this.#getTime() - (this.#timers.pause - this.#timers.start);
         this.#timers.pause = 0;
         switch (this.#action) {
-            case 'open': await this.#open(); break;
-            case 'append': await this.#append(); break;
-            case 'close': await this.#close(); break;
+            case 'open': this.#open(); break;
+            case 'append': this.#append(); break;
+            case 'close': this.#close(); break;
         }
     }
 
@@ -111,31 +82,30 @@ class Upload {
         if (this.#timers.pause > 0) {
             await this.#remove();
         } else {
-            this.#timers.stop = this.time;
+            this.#timers.stop = this.#getTime();
         }
     }
 
     #open = async () => {
-        this.#action = 'open';
         this.#chunk.size.base = this.#options.chunkSize.minimum;
         const response = await this.#request('open');
-        this.#file.hash = response.hash;
+        this.#hash = response.hash;
         this.#append();
     };
 
     #append = async () => {
-        this.#action = 'append';
         this.#chunk.number ++;
         this.#chunk.size.value =
             this.#chunk.size.base * this.#chunk.size.multiplier;
         let chunk =
             this.#file.slice(this.#chunk.offset, this.#chunk.offset + this.#chunk.size.value);
         let data = new FormData();
-        data.append('hash', this.#file.hash);
+        data.append('hash', this.#hash);
         data.append('offset', this.#chunk.offset);
         data.append('chunk', chunk, this.#file.name);
-        let timestamp = (new Date()).getTime();
+        let timestamp = (new Date).getTime();
         const response = await this.#request('append', data);
+        if (response === undefined) return;
         this.#chunk.offset = response.size;
         this.#sizing(timestamp);
         if (this.#chunk.offset < this.#file.size) {
@@ -146,28 +116,29 @@ class Upload {
     };
 
     #close = async () => {
-        this.#action = 'close';
         let data = new FormData();
         data.append('time', this.#file.lastModified);
-        data.append('hash', this.#file.hash);
+        data.append('hash', this.#hash);
         const response = await this.#request('close', data);
+        if (response === undefined) return;
         if (response.size !== this.#file.size)
             throw new Error('Неправельний розмір завантаженого файлу');
-        this.#speed = Math.round(this.#file.size / (this.time - this.#timers.start));
+        this.#chunk.speed = Math.round(this.#file.size / (this.#getTime() - this.#timers.start));
         this.#chunk.size.value = Math.round(this.#file.size / this.#chunk.number);
         await this.#callbacks.resolve();
     };
 
     #remove = async () => {
         let data = new FormData();
-        data.append('hash', this.#file.hash);
+        data.append('hash', this.#hash);
         await this.#request('remove', data);
     };
 
-    #request = async (action, data = new FormData()) => {
+    #request = async (action, data = {}, retry = 1) => {
         if (this.#timers.pause > 0) {
             this.#callbacks.pause();
-            this.#speed = 0;
+            this.#chunk.speed = 0;
+            this.#action = action;
             return;
         }
         if (this.#timers.stop > 0) {
@@ -175,54 +146,64 @@ class Upload {
             return;
         }
         let response = {};
-        const url = this.#url + '?action=' + action + '&name=' + this.#file.name;
+        const url = this.#options.url + '?action=' + action + '&name=' + this.#file.name;
         try {
             response = await fetch(url, {method: 'POST', body: data});
         } catch (e) {
-            this.#retry ++;
-            if (action === 'append') {
-                if ((this.#chunk.size.base / 2) > this.#options.chunkSize.minimum)
-                    this.#chunk.size.base /= 2;
-                if (this.#retry > this.#options.retry.limit) {
-                    this.#retry = 0;
-                    this.#chunk.size.multiplier = 1;
-                    this.#chunk.size.base = this.#options.chunkSize.minimum;
-                    this.pause();
-                    this.#callbacks.reject(action);
-                    return;
-                }
+            if (retry > this.#options.retry.limit) {
+                this.pause();
+                this.#action = action;
+                this.#callbacks.reject(action);
+                return;
             }
-            console.warn('Повторний запит #' + this.#retry + ' / ' + human.time(this.time));
+            console.warn('Повторний запит #' + retry + ' / ' + human.time(this.#getTime()));
             setTimeout(
-                () => {
-                    switch (this.#action) {
-                        case 'open': this.#open(); break;
-                        case 'append': this.#append(); break;
-                        case 'close': this.#close(); break;
-                    }
-                },
-                this.#options.retry.interval * 1000);
+                () => {this.#request(action, data, retry ++)},
+                this.#options.retry.interval * 1000
+            );
         }
-        this.#callbacks.iteration(this.status);
+        this.#callbacks.iteration(this.#getStatus());
         const responseJSON = await response.json();
         if (response.ok) {
             return responseJSON;
         } else {
             const message = ((response.status === 500) && (responseJSON.exception !== undefined))
                 ? response.statusText + ': ' + responseJSON.exception
-                : 'Під час виконання запиту "' + action + '" виникла помилка';
+                : 'Під час виконання запиту "' + this.#action + '" виникла помилка';
             throw new Error(message);
         }
     };
 
+    #getTime = () => {
+        return Math.round(
+            ((new Date()).getTime() / 1000) - ((new Date()).getTimezoneOffset() * 60)
+        );
+    };
+
+    #getStatus = () => {
+        let status = {chunk: this.#chunk.size.value, speed: this.#chunk.speed, time: {}};
+        status.time.elapsed = Math.round(this.#getTime() - this.#timers.start);
+        if (this.#chunk.speed > 0) {
+            status.time.estimate =
+                this.#file.size / (this.#chunk.offset / status.time.elapsed);
+            status.time.estimate =
+                Math.round(status.time.estimate - status.time.elapsed);
+        } else {
+            status.time.estimate = 0;
+        }
+        status.size = {
+            bytes: this.#chunk.offset,
+            percent: Math.round(this.#chunk.offset * 100 / this.#file.size)
+        };
+        return status;
+    };
+
     #sizing = (timestamp) => {
-        let interval = ((new Date()).getTime() - timestamp) / 1000;
-
+        let interval = ((new Date).getTime() - timestamp) / 1000;
         let speed = Math.round(this.#chunk.size.value / interval);
-//console.log(this.#chunk.number, this.#chunk.size, human.size(speed)+'/с', interval);
-
+console.log(this.#chunk.number, this.#chunk.size, human.size(speed)+'/с', interval);
         if (this.#chunk.size.multiplier === 2) {
-            if ((interval < this.#options.interval) && (speed > this.#speed)) {
+            if ((interval < this.#options.interval) && (speed > this.#chunk.speed)) {
                 if ((this.#chunk.size.base * 2) < this.#options.chunkSize.maximum)
                     this.#chunk.size.base *= 2;
             } else {
@@ -230,8 +211,7 @@ class Upload {
                     this.#chunk.size.base /= 2;
             }
         }
-
-        this.#speed = speed;
+        this.#chunk.speed = speed;
         this.#chunk.size.multiplier = 3 - this.#chunk.size.multiplier;
     };
 }

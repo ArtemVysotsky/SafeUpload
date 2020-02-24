@@ -33,14 +33,13 @@ nodes.buttons.file.addEventListener('change', function() {
         if (this.files[0] === undefined) return false;
         upload = new Upload(this.files[0], {
             iteration: (status) => { // дії при кожній ітерації процесу завантаження файла
-                nodes.indicators.speed.innerHTML
-                    = human.size(status.speed) + '/c' + ' (' + human.size(status.chunk) + ')';
-                nodes.indicators.time.innerHTML
-                    = human.time(status.time.elapsed) + ' / ' + human.time(status.time.estimate);
-                nodes.indicators.progress.innerHTML
-                    = human.size(upload.size.bytes) + ' (' + upload.size.percent + '%)';
-                nodes.indicators.progress.style.width
-                    = upload.size.percent + '%';
+                nodes.indicators.speed.innerHTML =
+                    human.size(status.speed) + '/c' + ' (' + human.size(status.chunk) + ')';
+                nodes.indicators.time.innerHTML =
+                    human.time(status.time.elapsed) + ' / ' + human.time(status.time.estimate);
+                nodes.indicators.progress.innerHTML =
+                    human.size(status.size.bytes) + ' (' + status.size.percent + '%)';
+                nodes.indicators.progress.style.width = status.size.percent + '%';
             },
             pause: () => { // дії при призупиненні процесу завантаження файла
                 nodes.buttons.resume.disabled = false;
