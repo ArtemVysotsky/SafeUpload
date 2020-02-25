@@ -20,13 +20,14 @@ class Upload {
             minimum: 1024,  // мінімальний розмір фрагмента файлу, байти
             maximum: 20 * 1024 * 1024 // максимальний розмір фрагмента файлу, байти
         },
-        fileSizeLimit: 2 * 1024 * 1024 * 1024, // максимальний розмір файлу, байти
+        fileSizeLimit: 1024 * 1024 * 1024, // максимальний розмір файлу, байти
         interval: 1, // максимальний рекомендований час тривалості запиту, секунди
         retry: {
             limit: 3, // максимальна кількість повторних запитів
             interval: 1 // тривалість паузи між повторними запитами, секунди
         }
     };
+    #action; // тип запиту
     #file; // об'єкт файлу
     #hash; // тимчасовий хеш файлу
     #chunk = {
@@ -39,7 +40,6 @@ class Upload {
         },
         speed: 0 // швидкість виконання запиту, байти/с
     };
-    #action; // тип запиту
     #timers = {
         start: 0, // час початку завантаження, секунди
         pause: 0, // час призупинки завантаження, секунди
@@ -87,13 +87,21 @@ class Upload {
     }
 
     #open = async () => {
+        this.#action = 'open';
         this.#chunk.size.base = this.#options.chunkSize.minimum;
-        const response = await this.#request('open');
+        const response = await this.#request();
         this.#hash = response.hash;
         this.#append();
     };
 
     #append = async () => {
+        this.#action = 'append';
+        if (this.#timers.pause > 0) {
+            this.#callbacks.pause();
+            this.#chunk.speed = 0;
+            return;
+        }
+        if (this.#timers.stop > 0) {this.#remove();return;}
         this.#chunk.number ++;
         this.#chunk.size.value =
             this.#chunk.size.base * this.#chunk.size.multiplier;
@@ -104,7 +112,7 @@ class Upload {
         data.append('offset', this.#chunk.offset);
         data.append('chunk', chunk, this.#file.name);
         let timestamp = (new Date).getTime();
-        const response = await this.#request('append', data);
+        const response = await this.#request(data);
         if (response === undefined) return;
         this.#chunk.offset = response.size;
         this.#sizing(timestamp);
@@ -116,10 +124,11 @@ class Upload {
     };
 
     #close = async () => {
+        this.#action = 'close';
         let data = new FormData();
         data.append('time', this.#file.lastModified);
         data.append('hash', this.#hash);
-        const response = await this.#request('close', data);
+        const response = await this.#request(data);
         if (response === undefined) return;
         if (response.size !== this.#file.size)
             throw new Error('Неправельний розмір завантаженого файлу');
@@ -129,36 +138,26 @@ class Upload {
     };
 
     #remove = async () => {
+        this.#action = 'remove';
         let data = new FormData();
         data.append('hash', this.#hash);
-        await this.#request('remove', data);
+        await this.#request(data);
     };
 
-    #request = async (action, data = {}, retry = 1) => {
-        if (this.#timers.pause > 0) {
-            this.#callbacks.pause();
-            this.#chunk.speed = 0;
-            this.#action = action;
-            return;
-        }
-        if (this.#timers.stop > 0) {
-            this.#remove();
-            return;
-        }
+    #request = async (data, retry = 1) => {
         let response = {};
-        const url = this.#options.url + '?action=' + action + '&name=' + this.#file.name;
+        const url = this.#options.url + '?action=' + this.#action + '&name=' + this.#file.name;
         try {
             response = await fetch(url, {method: 'POST', body: data});
         } catch (e) {
             if (retry > this.#options.retry.limit) {
                 this.pause();
-                this.#action = action;
-                this.#callbacks.reject(action);
+                this.#callbacks.reject(this.#action);
                 return;
             }
             console.warn('Повторний запит #' + retry + ' / ' + human.time(this.#getTime()));
             setTimeout(
-                () => {this.#request(action, data, retry ++)},
+                () => {this.#request(data, retry ++)},
                 this.#options.retry.interval * 1000
             );
         }

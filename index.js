@@ -10,22 +10,25 @@ let upload;
 
 /* Збережені посилання на елементи сторінки */
 const nodes = {};
-nodes.form = {};
-nodes.form.self = document.querySelector('main form');
-nodes.form.file = nodes.form.self.querySelector('div.file');
-nodes.form.progress = nodes.form.self.querySelector('div.progress');
-nodes.form.control = nodes.form.self.querySelector('div.control');
-nodes.form.status = nodes.form.self.querySelector('div.status');
-nodes.buttons = {};
-nodes.buttons.file = nodes.form.file.querySelector('input');
-nodes.buttons.upload = nodes.form.control.querySelector('input.upload');
-nodes.buttons.pause = nodes.form.control.querySelector('input.pause');
-nodes.buttons.resume = nodes.form.control.querySelector('input.resume');
-nodes.buttons.cancel = nodes.form.control.querySelector('input.cancel');
-nodes.indicators = {};
-nodes.indicators.speed = nodes.form.status.querySelector('span.speed');
-nodes.indicators.time = nodes.form.status.querySelector('span.time');
-nodes.indicators.progress = nodes.form.progress.querySelector('div.progress-bar');
+nodes.form = new function() {
+    this.self = document.querySelector('main form');
+    this.file = this.self.querySelector('div.file');
+    this.progress = this.self.querySelector('div.progress');
+    this.control = this.self.querySelector('div.control');
+    this.status = this.self.querySelector('div.status');
+};
+nodes.buttons = new function() {
+    this.file = nodes.form.file.querySelector('input');
+    this.upload = nodes.form.control.querySelector('input.upload');
+    this.pause = nodes.form.control.querySelector('input.pause');
+    this.resume = nodes.form.control.querySelector('input.resume');
+    this.cancel = nodes.form.control.querySelector('input.cancel');
+};
+nodes.indicators = new function() {
+    this.speed = nodes.form.status.querySelector('span.speed');
+    this.time = nodes.form.status.querySelector('span.time');
+    this.progress = nodes.form.progress.querySelector('div.progress-bar');
+};
 
 /* Додаємо реакції на різні дії користувача */
 nodes.buttons.file.addEventListener('change', function() {
