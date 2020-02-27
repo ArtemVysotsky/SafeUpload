@@ -6,10 +6,8 @@
  * @copyright   GNU General Public License v3
  */
 
-let upload;
-
 /* Збережені посилання на елементи сторінки */
-const nodes = {};
+let nodes = {};
 nodes.form = new function() {
     this.self = document.querySelector('main form');
     this.file = this.self.querySelector('div.file');
@@ -30,37 +28,43 @@ nodes.indicators = new function() {
     this.progress = nodes.form.progress.querySelector('div.progress-bar');
 };
 
-/* Додаємо реакції на різні дії користувача */
+/* Реакції на різні дії процесу завантаження файла */
+let callbacks;
+callbacks = {
+    iteration: (status) => { // дії при кожній ітерації процесу завантаження файла
+        nodes.indicators.speed.innerHTML =
+            human.size(status.speed) + '/c' + ' (' + human.size(status.chunk) + ')';
+        nodes.indicators.time.innerHTML =
+            human.time(status.time.elapsed) + ' / ' + human.time(status.time.estimate);
+        nodes.indicators.progress.innerHTML =
+            human.size(status.size.bytes) + ' (' + status.size.percent + '%)';
+        nodes.indicators.progress.style.width = status.size.percent + '%';
+    },
+    pause: () => { // дії при призупиненні процесу завантаження файла
+        nodes.buttons.resume.disabled = false;
+        nodes.buttons.pause.disabled = true;
+    },
+    timeout: () => { // дії при відсутності відповіді від сервера
+        nodes.buttons.resume.disabled = false;
+        nodes.buttons.pause.disabled = true;
+        alert('Сервер не відповідає, спробуйте пізніше');
+    },
+    resolve: () => { // дії при закінчені процесу завантаження файла
+        nodes.buttons.file.disabled = false;
+        nodes.buttons.pause.disabled = true;
+        nodes.buttons.resume.disabled = true;
+        nodes.buttons.cancel.disabled = true;
+        console.log('Завантаження файла завершено');
+    },
+    reject: (e) => {error(e)} // дії при помилці
+};
+
+/* Реакції на різні дії користувача */
+let upload;
 nodes.buttons.file.addEventListener('change', function() {
     try {
         if (this.files[0] === undefined) return false;
-        upload = new Upload(this.files[0], {
-            iteration: (status) => { // дії при кожній ітерації процесу завантаження файла
-                nodes.indicators.speed.innerHTML =
-                    human.size(status.speed) + '/c' + ' (' + human.size(status.chunk) + ')';
-                nodes.indicators.time.innerHTML =
-                    human.time(status.time.elapsed) + ' / ' + human.time(status.time.estimate);
-                nodes.indicators.progress.innerHTML =
-                    human.size(status.size.bytes) + ' (' + status.size.percent + '%)';
-                nodes.indicators.progress.style.width = status.size.percent + '%';
-            },
-            pause: () => { // дії при призупиненні процесу завантаження файла
-                nodes.buttons.resume.disabled = false;
-                nodes.buttons.pause.disabled = true;
-            },
-            resolve: () => { // дії при закінчені процесу завантаження файла
-                nodes.buttons.file.disabled = false;
-                nodes.buttons.pause.disabled = true;
-                nodes.buttons.resume.disabled = true;
-                nodes.buttons.cancel.disabled = true;
-                console.log('Завантаження файла завершено');
-            },
-            reject: () => { // дії при відсутності відповіді від сервера
-                nodes.buttons.resume.disabled = false;
-                nodes.buttons.pause.disabled = true;
-                alert('Сервер не відповідає, спробуйте пізніше');
-            }
-        });
+        upload = new Upload(this.files[0], callbacks);
         nodes.buttons.upload.disabled = false;
         nodes.indicators.speed.innerHTML = null;
         nodes.indicators.time.innerHTML = null;

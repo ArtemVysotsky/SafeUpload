@@ -1,6 +1,6 @@
 <?php
 /**
- * Клас File для роботи з файлом завантаження
+ * Клас для роботи з файлом завантаження
  *
  * @author      Артем Висоцький <a.vysotsky@gmail.com>
  * @link        https://github.com/ArtemVysotsky/Upload
@@ -31,7 +31,7 @@ class File {
     protected $hash;
 
     /** @var integer Максимальний розмір файла */
-    protected $sizeMaximum = 10 * 1024 * 1024 * 1024;
+    protected $sizeMaximum = 1024 * 1024;// * 1024;
 
     /** @var boolean Ознака дозволу перезапису файлів з однаковою назвою */
     protected $overwrite = true;
