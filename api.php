@@ -105,7 +105,7 @@ function error($message, $file, $line, $type) {
 
     $error = sprintf('%s  %s (%s:%d, %d)', date('Y-m-d H:i:s'), $message, $file, $line, $type);
 
-    file_put_contents(__DIR__ . '/log', $error);
+    file_put_contents(__DIR__ . '/log', $error, FILE_APPEND);
 }
 
 /**
