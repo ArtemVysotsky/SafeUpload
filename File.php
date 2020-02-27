@@ -31,7 +31,7 @@ class File {
     protected $hash;
 
     /** @var integer Максимальний розмір файла */
-    protected $sizeMaximum = 1024 * 1024;// * 1024;
+    protected $sizeMaximum = 1024 * 1024 * 1024;
 
     /** @var boolean Ознака дозволу перезапису файлів з однаковою назвою */
     protected $overwrite = true;

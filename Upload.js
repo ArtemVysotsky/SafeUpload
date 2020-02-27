@@ -171,7 +171,7 @@ class Upload {
         let responseJSON;
         try {
             responseJSON = await response.json();
-            if (!response.ok) {
+            if (response.ok) {
                 return responseJSON;
             } else {
                 let message = (response.status === 500)
