@@ -6,58 +6,80 @@
  * @copyright   GNU General Public License v3
  */
 
-/** @typedef {object} jqXHR **/
-/** @typedef {object} jqXHR.responseJSON **/
-
 /** ToDo: Перевірити роботу відновлення завантаження */
 /** ToDo: Відрефакторити код */
 
 class Upload {
+    /**
+     * @property {object}   #options                    - Налаштування класу
+     * @property {string}   #options.url                - Адреса API для завантаження файлу
+     * @property {object}   #options.chunkSize          - Налаштування розміру фрагмента файлу
+     * @property {number}   #options.chunkSize.minimum  - Мінімальний розмір фрагмента файлу, байти
+     * @property {number}   #options.chunkSize.maximum  - Максимальний розмір фрагмента файлу, байти
+     * @property {number}   #options.fileSizeLimit      - Максимальний дозволений розмір файлу, байти
+     * @property {number}   #options.interval           - Максимальний рекомендована тривалість запиту, секунди
+     * @property {object}   #options.retry              - Налаштування повторних запитів
+     * @property {number}   #options.retry.limit        - Максимальна кількість повторних запитів
+     * @property {number}   #options.retry.interval     - Тривалість паузи між повторними запитами, секунди
+     */
     #options = {
-        url: 'api.php', // адреса API для завантаження файлу
-        chunkSize: {
-            minimum: 1024,  // мінімальний розмір фрагмента файлу, байти
-            maximum: 20 * 1024 * 1024 // максимальний розмір фрагмента файлу, байти
-        },
-        fileSizeLimit: 1024 * 1024 * 1024, // максимальний розмір файлу, байти
-        interval: 3, // максимальний рекомендований час тривалості запиту, секунди
-        retry: {
-            limit: 3, // максимальна кількість повторних запитів
-            interval: 1 // тривалість паузи між повторними запитами, секунди
-        }
-    };
-    #file; // об'єкт файлу
-    #hash; // тимчасовий хеш файлу
-    #chunk = {
-        number: 0, // порядковий номер фрагмента файлу
-        offset: 0, // зміщення від початку файлу, байти
-        size: {
-            base: 0, // розмір бази фрагмента файлу, байти
-            value: 0, // поточний розмір фрагмента файлу, байти
-            coefficient: 1 // коефіцієнт для визначення поточного розміру фрагмента файлу (1|2)
-        },
-        value: null, // вміст фрагмента файлу
-        speed: 0 // швидкість виконання запиту, байти/с
-    };
-    #request = {
-        action: null,  // тип запиту
-        data: null  // дані запиту
-    };
-    #timers = {
-        start: null, // час початку завантаження, секунди
-        pause: null, // час призупинки завантаження, секунди
-        stop: null, // час зупинки завантаження, секунди
-        request: null, // час перед початком виконання запиту, мілісекунди
-        status: null // час попереднього запиту індикаторів процесу завантаження файлу, секунди
-    };
-    #callbacks = {
-        iteration: () => {}, // дій після виконання кожного запита на сервер
-        pause: () => {}, // дії при призупинені процесу завантаження файлу
-        timeout: () => {}, // дії при відсутності відповіді від сервера
-        resolve: () => {}, // дій при завершені процесу завантаження файлу
-        reject: () => {} // // дії при винекненні помилки під час процесу
+        url: 'api.php', chunkSize: {minimum: 1024, maximum: 20 * 1024 * 1024},
+        fileSizeLimit: 1024 * 1024 * 1024, interval: 3, retry: {limit: 3, interval: 1}
     };
 
+    /** @property {File} #file - Об'єкт файлу */
+    #file;
+
+    /** @property {string} #hash - Тимчасовий хеш файлу */
+    #hash;
+
+    /**
+     * @property {object}   #chunk                  - Дані фрагмента файлу
+     * @property {number}   #chunk.number           - Порядковий номер фрагмента файлу
+     * @property {number}   #chunk.offset           - Зміщення від початку файлу, байти
+     * @property {object}   #chunk.size             - Дані розміру фрагмента файлу, байти
+     * @property {number}   #chunk.size.base        - Розмір бази фрагмента файлу, байти
+     * @property {number}   #chunk.size.value       - Поточний розмір фрагмента файлу, байти
+     * @property {number}   #chunk.size.coefficient - Коефіцієнт розміру фрагмента файлу (1|2)
+     * @property {File}     #chunk.value            - Вміст фрагмента файлу (File)
+     * @property {number}   #chunk.speed            - Швидкість виконання запиту, байти/с
+     */
+    #chunk = {number: 0, offset: 0, size: {base: 0, value: 0, coefficient: 1}, value: null, speed: 0};
+
+    /**
+     * @property {object}   #request        - Запит до сервера
+     * @property {string}   #request.action - Тип запиту
+     * @property {object}   #request.data   - Дані запиту
+     */
+    #request = {action: null, data: null};
+
+    /**
+     * @property {object} #timers           - Мітки часу
+     * @property {number} #timers.start     - Час початку завантаження, секунди
+     * @property {number} #timers.pause     - Час призупинки завантаження, секунди
+     * @property {number} #timers.stop      - Час зупинки завантаження, секунди
+     * @property {number} #timers.request   - Час перед початком виконання запиту, мілісекунди
+     * @property {number} #timers.status    - Час попереднього запиту індикаторів процесу завантаження файлу, секунди
+     */
+    #timers = {start: null, pause: null, stop: null, request: null, status: null};
+
+    /**
+     * @property {object} #callbacks                - Зворотні функції
+     * @property {function} #callbacks.iteration    - Дії при виконанні кожного запита на сервер
+     * @property {function} #callbacks.pause        - Дії при призупинені процесу завантаження файлу
+     * @property {function} #callbacks.timeout      - Дії при відсутності відповіді від сервера
+     * @property {function} #callbacks.resolve      - Дії при завершені процесу завантаження файлу
+     * @property {function} #callbacks.reject       - Дії при винекненні помилки під час процесу
+     */
+    #callbacks = {
+        iteration: () => {}, pause: () => {}, timeout: () => {}, resolve: () => {}, reject: () => {}
+    };
+
+    /**
+     * Конструктор
+     * @param {File} file - Обє'ект з даними файлу
+     * @param {object} callbacks - Зворотні функції
+     */
     constructor(file, callbacks = {}) {
         if (file.size > this.#options.fileSizeLimit)
             throw new Error('Розмір файлу більше дозволеного');
@@ -65,13 +87,24 @@ class Upload {
         this.#callbacks = {...callbacks};
     }
 
+    /**
+     * Починає процес завантаження файлу на сервер
+     * @returns {Promise<void>}
+     */
     async start() {
         this.#timers.start = this.#getTime();
         await this.#open();
     }
 
+    /**
+     * Призупиняє процес завантаження файлу на сервер
+     */
     pause() {this.#timers.pause = this.#getTime()}
 
+    /**
+     * Продовжує процес завантаження файлу на сервер
+     * @returns {Promise<void>}
+     */
     async resume() {
         this.#timers.start =
             this.#getTime() - (this.#timers.pause - this.#timers.start);
@@ -83,6 +116,10 @@ class Upload {
         }
     }
 
+    /**
+     * Скасовує процес завантаження файлу на сервер
+     * @returns {Promise<void>}
+     */
     async cancel() {
         if (!this.#timers.pause) {
             await this.#remove();
@@ -91,6 +128,11 @@ class Upload {
         }
     }
 
+    /**
+     * Відкриває файл для запису на сервері
+     * @returns {Promise<void>}
+     * @see Upload.#request
+     */
     #open = async () => {
         this.#request.action = 'open';
         this.#chunk.size.base = this.#options.chunkSize.minimum;
@@ -99,6 +141,11 @@ class Upload {
         this.#append();
     };
 
+    /**
+     * Додає фрагмент файлу на сервер
+     * @returns {Promise<void>}
+     * @see Upload.#request
+     */
     #append = async () => {
         this.#request.action = 'append';
         if (this.#timers.pause) {
@@ -106,7 +153,10 @@ class Upload {
             this.#chunk.speed = 0;
             return;
         }
-        if (this.#timers.stop) {this.#remove();return;}
+        if (this.#timers.stop) {
+            this.#remove();
+            return;
+        }
         this.#chunk.number ++;
         this.#chunk.size.value =
             this.#chunk.size.base * this.#chunk.size.coefficient;
@@ -128,6 +178,12 @@ class Upload {
         }
     };
 
+    /**
+     * Закриває файл на сервері
+     * @throws {Error} - Неправельний розмір завантаженого файлу
+     * @returns {Promise<void>}
+     * @see Upload.#request
+     */
     #close = async () => {
         this.#request.action = 'close';
         this.#request.data = new FormData();
@@ -136,18 +192,30 @@ class Upload {
         const response = await this.#send();
         if (response === undefined) return;
         if (response.size !== this.#file.size)
-            throw new Error('Неправельний розмір завантаженого файлу');
+            throw new Error('Неправильний розмір завантаженого файлу');
         this.#chunk.speed = Math.round(this.#file.size / (this.#getTime() - this.#timers.start));
         this.#chunk.size.value = Math.round(this.#file.size / this.#chunk.number);
         await this.#callbacks.resolve();
     };
 
+    /**
+     * Видаляє файл на сервері
+     * @returns {Promise<void>}
+     * @see Upload.#request
+     */
     #remove = async () => {
         this.#request.action = 'remove';
         this.#request.data = (new FormData()).append('hash', this.#hash);
         await this.#send();
     };
 
+    /**
+     * Відправляє запит на сервер
+     * @param {number} [retry = 1] - Кількіість повторних запитів
+     * @returns {Promise<void>}
+     * @throws {Error} - Неправильний формат відповіді сервера
+     * @see Upload.#request
+     */
     #send = async (retry = 1) => {
         let response = {};
         const url = this.#options.url + '?action=' + this.#request.action + '&name=' + this.#file.name;
@@ -184,14 +252,30 @@ class Upload {
         }
     };
 
+    /**
+     *  Повертає мітку часу з врахуванням часової зони
+     *  returns {number} - Мітка часу, секунди
+     */
     #getTime = () => {
         return Math.round(
             ((new Date()).getTime() / 1000) - ((new Date()).getTimezoneOffset() * 60)
         );
     };
 
+    /**
+     * Вираховує та повертає дані про статус процесу завантаження файлу
+     * @returns     {object}
+     * @property    {object} size           - Розмір
+     * @property    {number} size.bytes     - Розмір завантаженої частини файлу, байти
+     * @property    {number} size.percent   - Розмір завантаженої частини файлу, відсотки
+     * @property    {number} speed          - Швидкість завантаження, байти/секунду
+     * @property    {number} chunk          - Розмір фрагмента файлу, байти
+     * @property    {object} time           - Час
+     * @property    {number} time.elapsed   - Минуло часу з початку процесу завантаження, секунди
+     * @property    {number} time.estimate  - Розрахунковий час закінчення процесу завантаження, секунди
+     */
     #getStatus = () => {
-        let status = {chunk: this.#chunk.size.value, speed: this.#chunk.speed, time: {}};
+        let status = {chunk: this.#chunk.size.value, speed: this.#chunk.speed, time: {}, size: {}};
         status.time.elapsed = Math.round(this.#getTime() - this.#timers.start);
         if (this.#chunk.speed > 0) {
             status.time.estimate =
@@ -208,6 +292,10 @@ class Upload {
         return status;
     };
 
+    /**
+     * Визначає базовий розмір та коєфіцієнт для наступгого фрагмента файлу
+     * @see Upload.#chunk
+     */
     #sizing = () => {
         let interval = ((new Date).getTime() - this.#timers.request) / 1000;
         let speed = Math.round(this.#chunk.size.value / interval);

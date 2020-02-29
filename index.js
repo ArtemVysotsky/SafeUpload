@@ -33,11 +33,11 @@ let callbacks;
 callbacks = {
     iteration: (status) => { // дії при кожній ітерації процесу завантаження файла
         nodes.indicators.speed.innerHTML =
-            human.size(status.speed) + '/c' + ' (' + human.size(status.chunk) + ')';
+            human.size(status.speed, 1) + '/c' + ' (' + human.size(status.chunk) + ')';
         nodes.indicators.time.innerHTML =
             human.time(status.time.elapsed) + ' / ' + human.time(status.time.estimate);
         nodes.indicators.progress.innerHTML =
-            human.size(status.size.bytes) + ' (' + status.size.percent + '%)';
+            human.size(status.size.bytes, 1) + ' (' + status.size.percent + '%)';
         nodes.indicators.progress.style.width = status.size.percent + '%';
     },
     pause: () => { // дії при призупиненні процесу завантаження файла
@@ -112,13 +112,13 @@ const error = (e) => {
 
 /* Вивід розміру файлу та інтервалу часу в зручному для людині вигляді */
 const human = new function() {
-    this.size = function(bytes) {
+    this.size = function(bytes, digits = 0) {
         const thousand = 1024;
         if(Math.abs(bytes) < thousand) return bytes + ' B';
         let i = -1;
         const units = ['КБ','МБ','ГБ'];
         do {bytes /= thousand; ++i;} while(Math.abs(bytes) >= thousand && i < units.length - 1);
-        return bytes.toFixed(1) + ' ' + units[i];
+        return bytes.toFixed(digits) + ' ' + units[i];
     };
     this.time = function(interval) {
         let hours = Math.floor(((interval % 31536000) % 86400) / 3600);
