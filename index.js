@@ -33,11 +33,11 @@ let callbacks;
 callbacks = {
     iteration: (status) => { // дії при кожній ітерації процесу завантаження файла
         nodes.indicators.speed.innerHTML =
-            human.size(status.speed, 1) + '/c' + ' (' + human.size(status.chunk) + ')';
+            Human.getSize(status.speed, 1) + '/c' + ' (' + Human.getSize(status.chunk) + ')';
         nodes.indicators.time.innerHTML =
-            human.time(status.time.elapsed) + ' / ' + human.time(status.time.estimate);
+            Human.getInterval(status.time.elapsed) + ' / ' + Human.getInterval(status.time.estimate);
         nodes.indicators.progress.innerHTML =
-            human.size(status.size.bytes, 1) + ' (' + status.size.percent + '%)';
+            Human.getSize(status.size.bytes, 1) + ' (' + status.size.percent + '%)';
         nodes.indicators.progress.style.width = status.size.percent + '%';
     },
     pause: () => { // дії при призупиненні процесу завантаження файла
@@ -110,17 +110,28 @@ const error = (e) => {
     alert('Помилка: ' + e.message);
 };
 
-/* Вивід розміру файлу та інтервалу часу в зручному для людині вигляді */
-const human = new function() {
-    this.size = function(bytes, digits = 0) {
+/** Змінює вигляд деяких велечини в зручний для людини формат */
+class Human {
+    /**
+     * Змінює вигляд розміру (при потребі)
+     * @param {number} bytes - Розмір в байтах
+     * @param {number} [digits = 0] - Кількіість знаків після коми
+     * @returns {string} - Розмір в Б/КБ/МБ/ГБ
+     */
+    static getSize = (bytes, digits = 0) => {
         const thousand = 1024;
-        if(Math.abs(bytes) < thousand) return bytes + ' B';
+        if(Math.abs(bytes) < thousand) return bytes + ' Б';
         let i = -1;
         const units = ['КБ','МБ','ГБ'];
         do {bytes /= thousand; ++i;} while(Math.abs(bytes) >= thousand && i < units.length - 1);
         return bytes.toFixed(digits) + ' ' + units[i];
     };
-    this.time = function(interval) {
+    /**
+     * Змінює вигляд інтервалу часу
+     * @param {number} interval - Інтервалу в секундах
+     * @returns {string} - Інтервал в форматі ГГ:ХХ:СС
+     */
+    static getInterval = (interval) => {
         let hours = Math.floor(((interval % 31536000) % 86400) / 3600);
         let minutes = Math.floor((((interval % 31536000) % 86400) % 3600) / 60);
         let seconds = (((interval % 31536000) % 86400) % 3600) % 60;
@@ -129,4 +140,4 @@ const human = new function() {
         if (seconds.toString().length === 1) seconds = '0' + seconds;
         return hours + ':' + minutes + ':' + seconds;
     };
-};
+}

@@ -89,7 +89,7 @@ class Upload {
 
     /**
      * Починає процес завантаження файлу на сервер
-     * @returns {Promise<void>}
+     * @returns {Promise}
      */
     async start() {
         this.#timers.start = this.#getTime();
@@ -103,7 +103,7 @@ class Upload {
 
     /**
      * Продовжує процес завантаження файлу на сервер
-     * @returns {Promise<void>}
+     * @returns {Promise}
      */
     async resume() {
         this.#timers.start =
@@ -118,7 +118,7 @@ class Upload {
 
     /**
      * Скасовує процес завантаження файлу на сервер
-     * @returns {Promise<void>}
+     * @returns {Promise}
      */
     async cancel() {
         if (!this.#timers.pause) {
@@ -130,7 +130,7 @@ class Upload {
 
     /**
      * Відкриває файл для запису на сервері
-     * @returns {Promise<void>}
+     * @returns {Promise}
      * @see Upload.#request
      */
     #open = async () => {
@@ -143,7 +143,7 @@ class Upload {
 
     /**
      * Додає фрагмент файлу на сервер
-     * @returns {Promise<void>}
+     * @returns {Promise}
      * @see Upload.#request
      */
     #append = async () => {
@@ -181,7 +181,7 @@ class Upload {
     /**
      * Закриває файл на сервері
      * @throws {Error} - Неправельний розмір завантаженого файлу
-     * @returns {Promise<void>}
+     * @returns {Promise}
      * @see Upload.#request
      */
     #close = async () => {
@@ -189,18 +189,18 @@ class Upload {
         this.#request.data = new FormData();
         this.#request.data.append('time', this.#file.lastModified);
         this.#request.data.append('hash', this.#hash);
+        this.#chunk.speed = Math.round(this.#file.size / (this.#getTime() - this.#timers.start));
+        this.#chunk.size.value = Math.round(this.#file.size / this.#chunk.number);
         const response = await this.#send();
         if (response === undefined) return;
         if (response.size !== this.#file.size)
             throw new Error('Неправильний розмір завантаженого файлу');
-        this.#chunk.speed = Math.round(this.#file.size / (this.#getTime() - this.#timers.start));
-        this.#chunk.size.value = Math.round(this.#file.size / this.#chunk.number);
         await this.#callbacks.resolve();
     };
 
     /**
      * Видаляє файл на сервері
-     * @returns {Promise<void>}
+     * @returns {Promise}
      * @see Upload.#request
      */
     #remove = async () => {
@@ -212,7 +212,7 @@ class Upload {
     /**
      * Відправляє запит на сервер
      * @param {number} [retry = 1] - Кількіість повторних запитів
-     * @returns {Promise<void>}
+     * @returns {Promise}
      * @throws {Error} - Неправильний формат відповіді сервера
      * @see Upload.#request
      */
@@ -227,7 +227,7 @@ class Upload {
                 this.#callbacks.timeout();
                 return;
             }
-            console.warn('Повторний запит #' + retry + ' / ' + human.time(this.#getTime()));
+            console.warn('Повторний запит #' + retry);
             setTimeout(
                 () => {this.#send(retry ++)},
                 this.#options.retry.interval * 1000
