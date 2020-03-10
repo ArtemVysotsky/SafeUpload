@@ -16,15 +16,16 @@ class Upload {
      * @property {object}   #options.chunkSize          - Налаштування розміру фрагмента файлу
      * @property {number}   #options.chunkSize.minimum  - Мінімальний розмір фрагмента файлу, байти
      * @property {number}   #options.chunkSize.maximum  - Максимальний розмір фрагмента файлу, байти
-     * @property {number}   #options.fileSizeLimit      - Максимальний дозволений розмір файлу, байти
-     * @property {number}   #options.interval           - Максимальний рекомендована тривалість запиту, секунди
+     * @property {number}   #options.fileSizeLimit      - Максимальний розмір файлу, байти
+     * @property {number}   #options.interval           - Рекомендована тривалість запиту, секунди
+     * @property {number}   #options.timeout            - Максимальна тривалість запиту, секунди
      * @property {object}   #options.retry              - Налаштування повторних запитів
      * @property {number}   #options.retry.limit        - Максимальна кількість повторних запитів
      * @property {number}   #options.retry.interval     - Тривалість паузи між повторними запитами, секунди
      */
     #options = {
         url: 'api.php', chunkSize: {minimum: 1024, maximum: 20 * 1024 * 1024},
-        fileSizeLimit: 1024 * 1024 * 1024, interval: 3, retry: {limit: 3, interval: 1}
+        fileSizeLimit: 1024 * 1024 * 1024, interval: 3, timeout: 5, retry: {limit: 3, interval: 3}
     };
 
     /** @property {File} #file - Об'єкт файлу */
@@ -137,6 +138,7 @@ class Upload {
         this.#request.action = 'open';
         this.#chunk.size.base = this.#options.chunkSize.minimum;
         const response = await this.#send();
+        if (response === undefined) return;
         this.#hash = response.hash;
         this.#append();
     };
@@ -216,39 +218,44 @@ class Upload {
      * @throws {Error} - Неправильний формат відповіді сервера
      * @see Upload.#request
      */
-    #send = async (retry = 1) => {
-        let response = {};
+    #send = async (retry = 0) => {
+        let timer = null;
         const url = this.#options.url + '?action=' + this.#request.action + '&name=' + this.#file.name;
-        try {
-            response = await fetch(url, {method: 'POST', body: this.#request.data});
-        } catch (e) {
-            if (retry > this.#options.retry.limit) {
+        const fetchPromise = fetch(url, {method: 'POST', body: this.#request.data});
+        const timeoutPromise =  new Promise(resolve =>
+            (timer = setTimeout(resolve, this.#options.timeout * 1000))
+        );
+        let response = await Promise.race([fetchPromise, timeoutPromise]);
+        if (response) {
+            clearTimeout(timer);
+            this.#request.data = null;
+            this.#callbacks.iteration(this.#getStatus());
+            let responseJSON;
+            try {
+                responseJSON = await response.json();
+                if (response.ok) {
+                    return responseJSON;
+                } else {
+                    let message = (response.status === 500)
+                        ? ((responseJSON.error !== undefined) ? responseJSON.error : response.statusText)
+                        : 'Під час виконання запиту "' + this.#request.action + '" виникла помилка';
+                    this.#callbacks.reject(Error(message));
+                }
+            } catch (e) {
+                throw new Error('Неправильний формат відповіді сервера');
+            }
+        } else {
+            if (retry < this.#options.retry.limit) {
+                retry ++;
+                console.warn('Повторний запит #' + retry);
+                await new Promise(() => setTimeout(
+                        async () => {await this.#send(retry)},
+                        this.#options.retry.interval * 1000)
+                );
+            } else {
                 this.pause();
                 this.#callbacks.timeout();
-                return;
             }
-            console.warn('Повторний запит #' + retry);
-            setTimeout(
-                () => {this.#send(retry ++)},
-                this.#options.retry.interval * 1000
-            );
-            return;
-        }
-        this.#request.data = null;
-        this.#callbacks.iteration(this.#getStatus());
-        let responseJSON;
-        try {
-            responseJSON = await response.json();
-            if (response.ok) {
-                return responseJSON;
-            } else {
-                let message = (response.status === 500)
-                    ? ((responseJSON.error !== undefined) ? responseJSON.error : response.statusText)
-                    : 'Під час виконання запиту "' + this.#request.action + '" виникла помилка';
-                this.#callbacks.reject(Error(message));
-            }
-        } catch (e) {
-            throw new Error('Неправильний формат відповіді сервера');
         }
     };
 
