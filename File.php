@@ -57,7 +57,7 @@ class File {
     public function __construct(string $name) {
 
         $this->setName($name);
-     }
+    }
 
     /**
      * Перевіряє та зберігає назву файла
@@ -81,9 +81,6 @@ class File {
      * @param boolean $check Ознака перевіки файл на наявність
      */
     public function setHash(string $hash, bool $check = true): void {
-
-        if (!preg_match('/^[0-9abcdef]{32}$/', $hash))
-            throw new Exception('Неправильний хеш файлу');
 
         $this->hash = $hash;
 
@@ -113,14 +110,14 @@ class File {
     /**
      * Додає в тимчасовий файл надісланий шматок
      *
+     * @param string $hash Хеш файла
      * @param array $file Масив з даними завантаженого файлу шматка
      * @param integer $offset Зміщення фрагмента файла відносно початку файла
      * @return integer Розмір тимчасового файла після запису шматка
      */
-    public function append(array $file, int $offset): int {
+    public function append(string $hash, array $file, int $offset): int {
 
-        if (!isset($this->hash))
-            throw new Exception('Відсутній хеш файла');
+        $this->setHash($hash);
 
         if ($file['error'] !== 0)
             throw new Exception('Помилка завантаження: ' . $this->errors[$file['error']]);
@@ -145,13 +142,13 @@ class File {
     /**
      * Закриває тимчасовий файл (перетворює в постійний)
      *
+     * @param string $hash Хеш файла
      * @param integer|null $time Час останньої модифікації файла
      * @return integer Остаточний розмір файла
      */
-    public function close(int $time = null): int {
+    public function close(string $hash, int $time = null): int {
 
-        if (!isset($this->hash))
-            throw new Exception('Відсутній хеш файла');
+        $this->setHash($hash);
 
         rename($this->sourceTemporary, $this->source);
 
@@ -163,11 +160,12 @@ class File {
 
     /**
      * Видаляє тимчасовий файл
+     *
+     * @param string $hash Хеш файла
      */
-    public function remove(): void {
+    public function remove(string $hash): void {
 
-        if (!isset($this->hash))
-            throw new Exception('Відсутній хеш файла');
+        $this->setHash($hash);
 
         if (file_exists($this->sourceTemporary))
             unlink($this->sourceTemporary);

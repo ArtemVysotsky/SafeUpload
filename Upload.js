@@ -265,12 +265,12 @@ class Upload {
     /**
      * Вираховує та повертає дані про статус процесу завантаження файлу
      * @returns     {object}
-     * @property    {object} size           - Розмір
+     * @property    {object} size           - Дані про розмір файлу
      * @property    {number} size.bytes     - Розмір завантаженої частини файлу, байти
      * @property    {number} size.percent   - Розмір завантаженої частини файлу, відсотки
      * @property    {number} speed          - Швидкість завантаження, байти/секунду
      * @property    {number} chunk          - Розмір фрагмента файлу, байти
-     * @property    {object} time           - Час
+     * @property    {object} time           - Дані про час
      * @property    {number} time.elapsed   - Минуло часу з початку процесу завантаження, секунди
      * @property    {number} time.estimate  - Розрахунковий час закінчення процесу завантаження, секунди
      */

@@ -22,44 +22,28 @@ try {
 
     require_once('File.php');
 
-    if (!isset($_GET['action'])) throw new Exception('Відсутня дія');
-    if (!isset($_GET['name'])) throw new Exception('Відсутня назва файлу');
-
     $file = new File($_GET['name']);
 
-    try {
+    switch($_GET['action']) {
 
-        if (isset($_POST['hash'])) $file->setHash($_POST['hash']);
+        case 'open': $response['hash'] = $file->open(); break;
 
-        switch($_GET['action']) {
+        case 'append': $response['size'] = $file->append($_POST['hash'], $_FILES['chunk'], $_POST['offset']); break;
 
-            case 'open': $response['hash'] = $file->open(); break;
+        case 'close': $response['size'] = $file->close($_POST['hash'], $_POST['time'] ?? null); break;
 
-            case 'append': {
+        case 'remove': $file->remove($_POST['hash']); break;
 
-                if ((count($_FILES) == 0) || (!isset($_FILES['chunk'])))
-                    throw new Exception('Відсутній фрагмент файла');
-
-                $response['size'] = $file->append($_FILES['chunk'], $_POST['offset']);
-
-            } break;
-
-            case 'close': $response['size'] = $file->close($_POST['time'] ?? null); break;
-
-            case 'remove': $file->remove(); break;
-
-            default: throw new Exception('Невідома дія');
-        }
-
-        output($response);
-
-    } catch (Exception $exception) {
-
-        $file->remove();
-        throw $exception;
+        default: throw new Exception('Невідома дія');
     }
 
+    echo json_encode($response, JSON_UNESCAPED_UNICODE);
+
 } catch (Exception $exception) {
+
+    if (isset($file) && is_object($file) && isset($_POST['hash']))
+
+        $file->remove($_POST['hash']);
 
     error($exception->getMessage(), $exception->getFile(), $exception->getLine(), $exception->getCode());
 }
@@ -101,19 +85,9 @@ function error($message, $file, $line, $type) {
 
     header('HTTP/1.x 500 Internal Server Error');
 
-    output(['error' => $message]);
+    echo json_encode(['error' => $message], JSON_UNESCAPED_UNICODE);
 
     $error = sprintf('%s  %s (%s:%d, %d)', date('Y-m-d H:i:s'), $message, $file, $line, $type);
 
     file_put_contents(__DIR__ . '/log', $error . "\r\n", FILE_APPEND);
-}
-
-/**
- * Вивід в JSON-формат
- *
- * @param array $response Дані для виводу
- */
-function output($response) {
-
-    echo json_encode($response, JSON_UNESCAPED_UNICODE);
 }
