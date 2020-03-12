@@ -226,12 +226,14 @@ class Upload {
             if (response.ok) {
                 return responseJSON;
             } else {
+                if (this.#settings.debug) console.error(responseJSON);
                 let message = (response.status === 500)
                     ? ((responseJSON.error !== undefined) ? responseJSON.error : response.statusText)
                     : 'Під час виконання запиту "' + this.#request.action + '" виникла помилка';
                 this.#callbacks.reject(Error(message));
             }
         } catch (e) {
+            if (this.#settings.debug) console.error(response);
             throw new Error('Неправильний формат відповіді сервера');
         }
     };
@@ -294,14 +296,14 @@ class Upload {
      * @property    {object} size           - Дані про розмір файлу
      * @property    {number} size.bytes     - Розмір завантаженої частини файлу, байти
      * @property    {number} size.percent   - Розмір завантаженої частини файлу, відсотки
+     * @property    {number} size.total     - Загальний розмір файлу, байти
      * @property    {number} speed          - Швидкість завантаження, байти/секунду
-     * @property    {number} chunk          - Розмір фрагмента файлу, байти
      * @property    {object} time           - Дані про час
      * @property    {number} time.elapsed   - Минуло часу з початку процесу завантаження, секунди
      * @property    {number} time.estimate  - Розрахунковий час закінчення процесу завантаження, секунди
      */
     #getStatus = () => {
-        let status = {chunk: this.#chunk.size.value, speed: this.#chunk.speed, time: {}, size: {}};
+        let status = {speed: this.#chunk.speed, time: {}, size: {}};
         status.time.elapsed = Math.round(this.#getTime() - this.#timers.start);
         if (this.#chunk.speed > 0) {
             status.time.estimate =
@@ -313,7 +315,8 @@ class Upload {
         }
         status.size = {
             bytes: this.#chunk.offset,
-            percent: Math.round(this.#chunk.offset * 100 / this.#file.size)
+            percent: Math.round(this.#chunk.offset * 100 / this.#file.size),
+            total: this.#file.size
         };
         return status;
     };

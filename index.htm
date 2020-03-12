@@ -16,28 +16,23 @@
         <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
         <style>
             main div.card {max-width: 480px;}
-            main div.card h5 sup {color: red; font-style: italic;}
             main div.card form div.progress {height: 30px;}
-            main div.card form div.control {}
             main div.card form div.status {height: 13px; display: flex; justify-content: space-between;}
-            main div.card form div.status span {}
         </style>
-        <script defer src="Upload.js"></script>
-        <script defer src="index.js"></script>
+        <script defer src="Upload.js?v=1"></script>
+        <script defer src="index.js?v=1"></script>
     </head>
     <body>
         <main class="container mt-5">
             <div class="card mx-auto mt-5">
+                <div class="card-header">Безпечне завантаження файлів <span class="badge badge-danger">alpha</span></div>
                 <div class="card-body">
-                    <h5 class="card-title">Безпечне завантаження файлів <sup>alpha</sup></h5>
-                    <hr />
                     <form>
-                        <div class="file mt-4"><input type="file" name="file" /></div>
-                        <div class="progress mt-4">
-                            <div class="progress-bar" role="progressbar" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
-                        </div>
-                        <div class="status small mt-2">
-                            <span class="speed" title="Швидкість завантаження (розмір фрагмента файлу)"></span>
+                        <div class="file mt-2"><input type="file" name="file" /></div>
+                        <div class="progress mt-4"><div class="progress-bar"></div></div>
+                        <div class="status small mt-1">
+                            <span class="size" title="Завантажено / загальний розмір"></span>
+                            <span class="speed" title="Швидкість завантаження"></span>
                             <span class="time" title="Часу пройшло / лишилось"></span>
                         </div>
                         <div class="control mt-4">

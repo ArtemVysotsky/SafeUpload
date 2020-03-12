@@ -23,22 +23,23 @@ nodes.buttons = new function() {
     this.cancel = nodes.form.control.querySelector('input.cancel');
 };
 nodes.indicators = new function() {
+    this.progress = nodes.form.progress.querySelector('div.progress-bar');
+    this.size = nodes.form.status.querySelector('span.size');
     this.speed = nodes.form.status.querySelector('span.speed');
     this.time = nodes.form.status.querySelector('span.time');
-    this.progress = nodes.form.progress.querySelector('div.progress-bar');
 };
 
 /* Реакції на різні дії процесу завантаження файла */
 let callbacks;
 callbacks = {
     iteration: (status) => { // дії при кожній ітерації процесу завантаження файла
-        nodes.indicators.speed.innerHTML =
-            Human.getSize(status.speed, 1) + '/c' + ' (' + Human.getSize(status.chunk) + ')';
+        nodes.indicators.progress.innerHTML =  status.size.percent +'%';
+        nodes.indicators.progress.style.width = status.size.percent + '%';
+        nodes.indicators.size.innerHTML =
+            Human.getSize(status.size.bytes, 1) + ' / ' + Human.getSize(status.size.total, 1);
+        nodes.indicators.speed.innerHTML = Human.getSize(status.speed, 1) + '/c';
         nodes.indicators.time.innerHTML =
             Human.getInterval(status.time.elapsed) + ' / ' + Human.getInterval(status.time.estimate);
-        nodes.indicators.progress.innerHTML =
-            Human.getSize(status.size.bytes, 1) + ' (' + status.size.percent + '%)';
-        nodes.indicators.progress.style.width = status.size.percent + '%';
     },
     pause: () => { // дії при призупиненні процесу завантаження файла
         nodes.buttons.resume.disabled = false;
@@ -66,7 +67,7 @@ nodes.buttons.file.addEventListener('change', function() {
         if (this.files[0] === undefined) return false;
         upload = new Upload(this.files[0], callbacks, {
             url: 'api.php', chunkSizeMaximum: 32 * 1024 * 1024, fileSizeLimit: 3 * 1024 * 1024 * 1024,
-            interval: 3, timeout: 8, retryLimit: 3, retryInterval: 0, debug: true
+            interval: 1, timeout: 5, retryLimit: 3, retryInterval: 0, debug: /debug=true/.test(window.location.search)
         });
         nodes.buttons.upload.disabled = false;
         nodes.indicators.speed.innerHTML = null;
