@@ -10,19 +10,33 @@
 /** ToDo: Перевірити роботу при помилках */
 /** ToDo: Перевірити видалення файла при помилці */
 
-error_reporting(0);
-ini_set('display_errors', '0');
-ini_set('display_startup_errors', '0');
-set_error_handler('errorHandler');
-register_shutdown_function('shutdownHandler');
+//error_reporting(0);
 
-$response = [];
+//ini_set('display_errors', '0');
+
+//ini_set('display_startup_errors', '0');
+
+set_error_handler('errorHandler');
+
+register_shutdown_function('shutdownHandler');
 
 try {
 
+    $response = [];
+
     require_once('File.php');
 
-    $file = new File($_GET['name']);
+    $file = new File();
+
+    $file->setPath(__DIR__ . '/uploads');
+
+    $file->setPathTemporary(__DIR__  . '/uploads/.tmp');
+
+    $file->setSizeMaximum(3 * 1024 * 1024 * 1024);
+
+    $file->setIsOverwrite(true);
+
+    $file->setName($_GET['name']);
 
     switch($_GET['action']) {
 

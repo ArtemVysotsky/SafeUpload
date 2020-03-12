@@ -11,21 +11,21 @@
 
 class Upload {
     /**
-     * @property {object}   #options                    - Налаштування класу
-     * @property {string}   #options.url                - Адреса API для завантаження файлу
-     * @property {object}   #options.chunkSize          - Налаштування розміру фрагмента файлу
-     * @property {number}   #options.chunkSize.minimum  - Мінімальний розмір фрагмента файлу, байти
-     * @property {number}   #options.chunkSize.maximum  - Максимальний розмір фрагмента файлу, байти
-     * @property {number}   #options.fileSizeLimit      - Максимальний розмір файлу, байти
-     * @property {number}   #options.interval           - Рекомендована тривалість запиту, секунди
-     * @property {number}   #options.timeout            - Максимальна тривалість запиту, секунди
-     * @property {object}   #options.retry              - Налаштування повторних запитів
-     * @property {number}   #options.retry.limit        - Максимальна кількість повторних запитів
-     * @property {number}   #options.retry.interval     - Тривалість паузи між повторними запитами, секунди
+     * @property {object}   #settings                    - Налаштування класу
+     * @property {string}   #settings.url                - Адреса API для завантаження файлу
+     * @property {object}   #settings.chunkSize          - Налаштування розміру фрагмента файлу
+     * @property {number}   #settings.chunkSizeMinimum   - Мінімальний розмір фрагмента файлу, байти
+     * @property {number}   #settings.chunkSizeMaximum   - Максимальний розмір фрагмента файлу, байти
+     * @property {number}   #settings.fileSizeLimit      - Максимальний розмір файлу, байти
+     * @property {number}   #settings.interval           - Рекомендована тривалість запиту, секунди
+     * @property {number}   #settings.timeout            - Максимальна тривалість запиту, секунди
+     * @property {object}   #settings.retry              - Налаштування повторних запитів
+     * @property {number}   #settings.retryLimit         - Максимальна кількість повторних запитів
+     * @property {number}   #settings.retryInterval      - Тривалість паузи між повторними запитами, секунди
      */
-    #options = {
-        url: 'api.php', chunkSize: {minimum: 1024, maximum: 20 * 1024 * 1024},
-        fileSizeLimit: 1024 * 1024 * 1024, interval: 3, timeout: 5, retry: {limit: 3, interval: 3}
+    #settings = {
+        url: 'api', chunkSizeMinimum: 1024, chunkSizeMaximum: 1024 * 1024, fileSizeLimit: 1024 * 1024,
+        interval: 1, timeout: 5, retryLimit: 5, retryInterval: 1, debug: false
     };
 
     /** @property {File} #file - Об'єкт файлу */
@@ -51,8 +51,9 @@ class Upload {
      * @property {object}   #request        - Запит до сервера
      * @property {string}   #request.action - Тип запиту
      * @property {object}   #request.data   - Дані запиту
+     * @property {number}   #request.retry  - Номер повторного запиту
      */
-    #request = {action: null, data: null};
+    #request = {action: null, data: null, retry: 0};
 
     /**
      * @property {object} #timers           - Мітки часу
@@ -80,9 +81,12 @@ class Upload {
      * Конструктор
      * @param {File} file - Обє'ект з даними файлу
      * @param {object} callbacks - Зворотні функції
+     * @param {object} settings - Налаштування
      */
-    constructor(file, callbacks = {}) {
-        if (file.size > this.#options.fileSizeLimit)
+    constructor(file, callbacks = {}, settings = {}) {
+        this.#settings = {... this.#settings, ... settings};
+        if (this.#settings.debug) console.log({settings: this.#settings});
+        if (file.size > this.#settings.fileSizeLimit)
             throw new Error('Розмір файлу більше дозволеного');
         this.#file = file;
         this.#callbacks = {...callbacks};
@@ -90,7 +94,6 @@ class Upload {
 
     /**
      * Починає процес завантаження файлу на сервер
-     * @returns {Promise}
      */
     async start() {
         this.#timers.start = this.#getTime();
@@ -104,7 +107,6 @@ class Upload {
 
     /**
      * Продовжує процес завантаження файлу на сервер
-     * @returns {Promise}
      */
     async resume() {
         this.#timers.start =
@@ -119,7 +121,6 @@ class Upload {
 
     /**
      * Скасовує процес завантаження файлу на сервер
-     * @returns {Promise}
      */
     async cancel() {
         if (!this.#timers.pause) {
@@ -131,12 +132,11 @@ class Upload {
 
     /**
      * Відкриває файл для запису на сервері
-     * @returns {Promise}
-     * @see Upload.#request
+     * @see this.#request
      */
     #open = async () => {
         this.#request.action = 'open';
-        this.#chunk.size.base = this.#options.chunkSize.minimum;
+        this.#chunk.size.base = this.#settings.chunkSizeMinimum;
         const response = await this.#send();
         if (response === undefined) return;
         this.#hash = response.hash;
@@ -145,8 +145,7 @@ class Upload {
 
     /**
      * Додає фрагмент файлу на сервер
-     * @returns {Promise}
-     * @see Upload.#request
+     * @see this.#request
      */
     #append = async () => {
         this.#request.action = 'append';
@@ -183,8 +182,7 @@ class Upload {
     /**
      * Закриває файл на сервері
      * @throws {Error} - Неправельний розмір завантаженого файлу
-     * @returns {Promise}
-     * @see Upload.#request
+     * @see this.#request
      */
     #close = async () => {
         this.#request.action = 'close';
@@ -202,8 +200,7 @@ class Upload {
 
     /**
      * Видаляє файл на сервері
-     * @returns {Promise}
-     * @see Upload.#request
+     * @see this.#request
      */
     #remove = async () => {
         this.#request.action = 'remove';
@@ -212,51 +209,73 @@ class Upload {
     };
 
     /**
-     * Відправляє запит на сервер
-     * @param {number} [retry = 1] - Кількіість повторних запитів
-     * @returns {Promise}
+     * Формує запити для сервера та конвртує відповіді від сервера
+     * @returns {object} - Відповідь сервера при наявності
      * @throws {Error} - Неправильний формат відповіді сервера
-     * @see Upload.#request
+     * @see this.#request
      */
-    #send = async (retry = 0) => {
+    #send = async () => {
+        const url = this.#settings.url + '?action=' + this.#request.action + '&name=' + this.#file.name;
+        let response = await this.#fetchExtended(url, {method: 'POST', body: this.#request.data});
+        if (!response) return;
+        this.#request.data = null;
+        this.#callbacks.iteration(this.#getStatus());
+        let responseJSON;
+        try {
+            responseJSON = await response.json();
+            if (response.ok) {
+                return responseJSON;
+            } else {
+                let message = (response.status === 500)
+                    ? ((responseJSON.error !== undefined) ? responseJSON.error : response.statusText)
+                    : 'Під час виконання запиту "' + this.#request.action + '" виникла помилка';
+                this.#callbacks.reject(Error(message));
+            }
+        } catch (e) {
+            throw new Error('Неправильний формат відповіді сервера');
+        }
+    };
+
+    /**
+     *  Відправляє запит на сервер з таймаутом та повторними запитами при потребі
+     *  @param {string} url - Адреса запиту
+     *  @param {object} body - Дані запиту
+     *  @returns {Response} - Відформатована відповідь сервера
+     *  @throws {Error} - Неправильний формат відповіді сервера
+     */
+    #fetchExtended = async (url, body) => {
         let timer = null;
-        const url = this.#options.url + '?action=' + this.#request.action + '&name=' + this.#file.name;
-        const fetchPromise = fetch(url, {method: 'POST', body: this.#request.data});
+        const fetchPromise = fetch(url, body);
         const timeoutPromise =  new Promise(resolve =>
-            (timer = setTimeout(resolve, this.#options.timeout * 1000))
+            (timer = setTimeout(resolve, this.#settings.timeout * 1000))
         );
         let response = await Promise.race([fetchPromise, timeoutPromise]);
-        if (response) {
-            clearTimeout(timer);
-            this.#request.data = null;
-            this.#callbacks.iteration(this.#getStatus());
-            let responseJSON;
-            try {
-                responseJSON = await response.json();
-                if (response.ok) {
-                    return responseJSON;
-                } else {
-                    let message = (response.status === 500)
-                        ? ((responseJSON.error !== undefined) ? responseJSON.error : response.statusText)
-                        : 'Під час виконання запиту "' + this.#request.action + '" виникла помилка';
-                    this.#callbacks.reject(Error(message));
-                }
-            } catch (e) {
-                throw new Error('Неправильний формат відповіді сервера');
-            }
-        } else {
-            if (retry < this.#options.retry.limit) {
-                retry ++;
-                console.warn('Повторний запит #' + retry);
+        if (!response) {
+            if (this.#settings.debug) console.log({response: response});
+            if (this.#request.retry < this.#settings.retryLimit) {
+                this.#request.retry ++;
+                if (this.#settings.debug) console.warn('Повторний запит #' + this.#request.retry);
                 await new Promise(() => setTimeout(
-                        async () => {await this.#send(retry)},
-                        this.#options.retry.interval * 1000)
+                    async () => {await this.#send()},
+                    this.#settings.retryInterval * 1000)
                 );
             } else {
                 this.pause();
                 this.#callbacks.timeout();
             }
+        } else {
+            clearTimeout(timer);
         }
+        return response;
+    };
+
+    /**
+     * Додає до числа пробіли між тисячами
+     * @param {number|string} value - Невідформатоване число
+     * returns {string} - Відформатоване число
+     */
+    #getNumberFormatted = (value) => {
+        return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     };
 
     /**
@@ -301,17 +320,25 @@ class Upload {
 
     /**
      * Визначає базовий розмір та коєфіцієнт для наступгого фрагмента файлу
-     * @see Upload.#chunk
+     * @see this.#chunk
      */
     #sizing = () => {
         let interval = ((new Date).getTime() - this.#timers.request) / 1000;
-        let speed = Math.round(this.#chunk.size.value / interval);
+        let speed = Math.round(this.#chunk.value.size / interval);
+        if (this.#settings.debug)
+            console.log(
+                '#' + this.#chunk.number.toString(),
+                this.#getNumberFormatted((this.#chunk.size.base / 1024).toFixed()).padStart(8) + ' KБ',
+                this.#getNumberFormatted((this.#chunk.size.value / 1024).toFixed()).padStart(8) + ' KБ',
+                this.#getNumberFormatted((speed / 1024).toFixed()).padStart(8) + ' KБ/с',
+                this.#getNumberFormatted(interval.toFixed(3)).padStart(8) + ' c'
+            );
         if (this.#chunk.size.coefficient === 2) {
-            if ((interval < this.#options.interval) && (speed > this.#chunk.speed)) {
-                if ((this.#chunk.size.base * 2) < this.#options.chunkSize.maximum)
+            if ((interval < this.#settings.interval) && (speed > this.#chunk.speed)) {
+                if ((this.#chunk.size.base * 2) < this.#settings.chunkSizeMaximum)
                     this.#chunk.size.base *= 2;
             } else {
-                if ((this.#chunk.size.base / 2) > this.#options.chunkSize.minimum)
+                if ((this.#chunk.size.base / 2) > this.#settings.chunkSizeMinimum)
                     this.#chunk.size.base /= 2;
             }
         }

@@ -9,78 +9,120 @@
 
 class File {
 
-    /** @var string Назва файла */
+    /** @var string Назва файлу */
     private $name;
 
-    /** @var string Назва тимчасового файла */
+    /** @var string Назва тимчасового файлу */
     private $nameTemporary;
 
-    /** @var string Повна назва файла з шляхом */
+    /** @var string Повна назва файлу з шляхом */
     private $source;
 
-    /** @var string Повна назва тимчасового файла з шляхом */
+    /** @var string Повна назва тимчасового файлу з шляхом */
     private $sourceTemporary;
 
     /** @var string Шлях до теки зберігання завантажених файлів */
-    protected $path = __DIR__ . '/uploads';
+    protected $path = '';
 
     /** @var string Шлях до теки тимчасового зберігання файлу під час завантження */
-    protected $pathTemporary = __DIR__  . '/uploads/.tmp';
+    protected $pathTemporary = '';
 
-    /** @var string Хеш файла */
+    /** @var string Хеш файлу */
     protected $hash;
 
-    /** @var integer Максимальний розмір файла */
-    protected $sizeMaximum = 1024 * 1024 * 1024;
+    /** @var integer Максимальний розмір файлу */
+    protected $sizeMaximum = 0;
 
     /** @var boolean Ознака дозволу перезапису файлів з однаковою назвою */
-    protected $overwrite = true;
+    protected $isOverwrite = false;
 
     /** @var array Перелік кодів та опису помилок завантаження файлів */
     protected $errors = array(
 
-        UPLOAD_ERR_INI_SIZE     => 'Розмір фрагмента файла більший за допустимий в налаштуваннях сервера',
-        UPLOAD_ERR_FORM_SIZE    => 'Розмір фрагмента файла більший за значення MAX_FILE_SIZE, вказаний в HTML-формі',
-        UPLOAD_ERR_PARTIAL      => 'Фрагмент файла завантажено тільки частково',
-        UPLOAD_ERR_NO_FILE      => 'Фрагмент файла не завантажено',
+        UPLOAD_ERR_INI_SIZE     => 'Розмір фрагмента файлу більший за допустимий в налаштуваннях сервера',
+        UPLOAD_ERR_FORM_SIZE    => 'Розмір фрагмента файлу більший за значення MAX_FILE_SIZE, вказаний в HTML-формі',
+        UPLOAD_ERR_PARTIAL      => 'Фрагмент файлу завантажено тільки частково',
+        UPLOAD_ERR_NO_FILE      => 'Фрагмент файлу не завантажено',
         UPLOAD_ERR_NO_TMP_DIR   => 'Відсутня тимчасова тека',
-        UPLOAD_ERR_CANT_WRITE   => 'Не вдалось записати фрагмент файла на диск',
-        UPLOAD_ERR_EXTENSION    => 'Сервер зупинив завантаження фрагмента файла',
+        UPLOAD_ERR_CANT_WRITE   => 'Не вдалось записати фрагмент файлу на диск',
+        UPLOAD_ERR_EXTENSION    => 'Сервер зупинив завантаження фрагмента файлу',
     );
 
 
     /**
     * Конструктор класу
-    *
-    * @param string $name Назва файла
     */
-    public function __construct(string $name) {
+    public function __construct() {
 
-        $this->setName($name);
     }
 
     /**
-     * Перевіряє та зберігає назву файла
+     * Зберігає шлях до теки зберігання завантажених файлів
      *
-     * @param string $name Назва файла
+     * @param string $path Шлях до теки
      */
-    protected function setName($name): void {
+    public function setPath(string $path): void {
+
+        $this->path = $path;
+    }
+
+    /**
+     * Зберігає шлях до теки тимчасового зберігання файлу під час завантження
+     *
+     * @param string $path Шлях до теки
+     */
+    public function setPathTemporary(string $path): void {
+
+        $this->pathTemporary = $path;
+    }
+
+    /**
+     * Зберігає максимальний розмір файлу
+     *
+     * @param integer $size Розмір файлу
+     */
+    public function setSizeMaximum(int $size): void {
+
+        $this->sizeMaximum = $size;
+    }
+
+    /**
+     * Зберігає ознаку дозволу перезапису файлів з однаковою назвою
+     *
+     * @param boolean $value Ознака дозволу перезапису
+     */
+    public function setIsOverwrite(bool $value): void {
+
+        $this->isOverwrite = $value;
+    }
+
+    /**
+     * Зберігає назву файлу
+     *
+     * @param string $name Назва файлу
+     */
+    public function setName(string $name): void {
 
         $this->name = $name;
 
-        $this->source = $this->path . DIRECTORY_SEPARATOR . $this->name;
-
-        if (!$this->overwrite && file_exists($this->source))
-            throw new Exception('Файл з такою назвою вже існує');
+        $this->setSource();
     }
 
     /**
-     * Перевіряє та зберігає хеш файла
+     * Створює та зберігає назву файлу
+     */
+    protected function setSource(): void {
+
+        $this->source = $this->path . DIRECTORY_SEPARATOR . $this->name;
+    }
+
+    /**
+     * Зберігає хеш файлу
      *
-     * @param string $hash Хеш файла
+     * @param string $hash Хеш файлу
      * @param boolean $check Ознака перевіки файл на наявність
      */
-    public function setHash(string $hash, bool $check = true): void {
+    protected function setHash(string $hash, bool $check = true): void {
 
         $this->hash = $hash;
 
@@ -96,9 +138,12 @@ class File {
     /**
     * Створює тимчасовий файл
     *
-    * @return string Хеш файла
+    * @return string Хеш файлу
     */
     public function open(): string {
+
+        if (!$this->isOverwrite && file_exists($this->source))
+            throw new Exception('Файл з такою назвою вже існує');
 
         $this->setHash(bin2hex(random_bytes(16)), false);
 
@@ -110,10 +155,10 @@ class File {
     /**
      * Додає в тимчасовий файл надісланий шматок
      *
-     * @param string $hash Хеш файла
+     * @param string $hash Хеш файлу
      * @param array $file Масив з даними завантаженого файлу шматка
-     * @param integer $offset Зміщення фрагмента файла відносно початку файла
-     * @return integer Розмір тимчасового файла після запису шматка
+     * @param integer $offset Зміщення фрагмента файлу відносно початку файлу
+     * @return integer Розмір тимчасового файлу після запису шматка
      */
     public function append(string $hash, array $file, int $offset): int {
 
@@ -128,7 +173,7 @@ class File {
         $size = filesize($this->sourceTemporary);
 
         if (($size + $file['size']) > $this->sizeMaximum)
-            throw new Exception('Розмір файла перевищує допустимий');
+            throw new Exception('Розмір файлу перевищує допустимий');
 
         if ($size != $offset) return $size;
 
@@ -142,13 +187,16 @@ class File {
     /**
      * Закриває тимчасовий файл (перетворює в постійний)
      *
-     * @param string $hash Хеш файла
-     * @param integer|null $time Час останньої модифікації файла
-     * @return integer Остаточний розмір файла
+     * @param string $hash Хеш файлу
+     * @param integer|null $time Час останньої модифікації файлу
+     * @return integer Остаточний розмір файлу
      */
     public function close(string $hash, int $time = null): int {
 
         $this->setHash($hash);
+
+        if (!$this->isOverwrite && file_exists($this->source))
+            throw new Exception('Файл з такою назвою вже існує');
 
         rename($this->sourceTemporary, $this->source);
 
@@ -161,7 +209,7 @@ class File {
     /**
      * Видаляє тимчасовий файл
      *
-     * @param string $hash Хеш файла
+     * @param string $hash Хеш файлу
      */
     public function remove(string $hash): void {
 

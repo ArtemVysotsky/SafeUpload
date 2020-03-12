@@ -64,7 +64,10 @@ let upload;
 nodes.buttons.file.addEventListener('change', function() {
     try {
         if (this.files[0] === undefined) return false;
-        upload = new Upload(this.files[0], callbacks);
+        upload = new Upload(this.files[0], callbacks, {
+            url: 'api.php', chunkSizeMaximum: 32 * 1024 * 1024, fileSizeLimit: 3 * 1024 * 1024 * 1024,
+            interval: 3, timeout: 8, retryLimit: 3, retryInterval: 0, debug: true
+        });
         nodes.buttons.upload.disabled = false;
         nodes.indicators.speed.innerHTML = null;
         nodes.indicators.time.innerHTML = null;
