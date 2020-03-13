@@ -21,11 +21,11 @@ class Upload {
      * @property {number}   #settings.timeout            - Максимальна тривалість запиту, секунди
      * @property {object}   #settings.retry              - Налаштування повторних запитів
      * @property {number}   #settings.retryLimit         - Максимальна кількість повторних запитів
-     * @property {number}   #settings.retryInterval      - Тривалість паузи між повторними запитами, секунди
+     * @property {number}   #settings.retryDelay         - Тривалість паузи між повторними запитами, секунди
      */
     #settings = {
         url: 'api', chunkSizeMinimum: 1024, chunkSizeMaximum: 1024 * 1024, fileSizeLimit: 1024 * 1024,
-        interval: 1, timeout: 5, retryLimit: 5, retryInterval: 1, debug: false
+        interval: 1, timeout: 5, retryLimit: 5, retryDelay: 1, debug: false
     };
 
     /** @property {File} #file - Об'єкт файлу */
@@ -51,9 +51,8 @@ class Upload {
      * @property {object}   #request        - Запит до сервера
      * @property {string}   #request.action - Тип запиту
      * @property {object}   #request.data   - Дані запиту
-     * @property {number}   #request.retry  - Номер повторного запиту
      */
-    #request = {action: null, data: null, retry: 0};
+    #request = {action: null, data: null};
 
     /**
      * @property {object} #timers           - Мітки часу
@@ -209,8 +208,8 @@ class Upload {
     };
 
     /**
-     * Формує запити для сервера та конвртує відповіді від сервера
-     * @returns {object} - Відповідь сервера при наявності
+     * Готує запит до сервера та витягує дані з відповіді
+     * @returns {object} - Відформатована відповідь сервера
      * @throws {Error} - Неправильний формат відповіді сервера
      * @see this.#request
      */
@@ -223,9 +222,7 @@ class Upload {
         let responseJSON;
         try {
             responseJSON = await response.json();
-            if (response.ok) {
-                return responseJSON;
-            } else {
+            if (!response.ok) {
                 if (this.#settings.debug) console.error(responseJSON);
                 let message = (response.status === 500)
                     ? ((responseJSON.error !== undefined) ? responseJSON.error : response.statusText)
@@ -236,58 +233,39 @@ class Upload {
             if (this.#settings.debug) console.error(response);
             throw new Error('Неправильний формат відповіді сервера');
         }
+        return responseJSON;
     };
 
     /**
-     *  Відправляє запит на сервер з таймаутом та повторними запитами при потребі
-     *  @param {string} url - Адреса запиту
-     *  @param {object} body - Дані запиту
-     *  @returns {Response} - Відформатована відповідь сервера
-     *  @throws {Error} - Неправильний формат відповіді сервера
+     * Відправляє запит на сервер з таймаутом та повторними запитами при потребі
+     * @param {string} url - Адреса запиту
+     * @param {object} body - Дані запиту
+     * @param {number} retry  - Номер повторного запиту
+     * @returns {Response} - Відповідь сервера при наявності
+     * @throws {Error} - Неправильний формат відповіді сервера
      */
-    #fetchExtended = async (url, body) => {
+    #fetchExtended = async (url, body, retry = 1) => {
         let timer = null;
         const fetchPromise = fetch(url, body);
         const timeoutPromise =  new Promise(resolve =>
             (timer = setTimeout(resolve, this.#settings.timeout * 1000))
         );
         let response = await Promise.race([fetchPromise, timeoutPromise]);
-        if (!response) {
-            if (this.#settings.debug) console.log({response: response});
-            if (this.#request.retry < this.#settings.retryLimit) {
-                this.#request.retry ++;
-                if (this.#settings.debug) console.warn('Повторний запит #' + this.#request.retry);
-                await new Promise(() => setTimeout(
-                    async () => {await this.#send()},
-                    this.#settings.retryInterval * 1000)
-                );
+        if (response) {
+            clearTimeout(timer);
+        } else {
+            if (retry <= this.#settings.retryLimit) {
+                if (this.#settings.debug)
+                    console.warn('Повторний запит #' + retry);
+                await this.#wait(this.#settings.retryDelay);
+                response = await this.#fetchExtended(url, body, ++ retry);
+                if (this.#settings.debug) console.log({response: response});
             } else {
                 this.pause();
                 this.#callbacks.timeout();
             }
-        } else {
-            clearTimeout(timer);
         }
         return response;
-    };
-
-    /**
-     * Додає до числа пробіли між тисячами
-     * @param {number|string} value - Невідформатоване число
-     * returns {string} - Відформатоване число
-     */
-    #getNumberFormatted = (value) => {
-        return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-    };
-
-    /**
-     *  Повертає мітку часу з врахуванням часової зони
-     *  returns {number} - Мітка часу, секунди
-     */
-    #getTime = () => {
-        return Math.round(
-            ((new Date()).getTime() / 1000) - ((new Date()).getTimezoneOffset() * 60)
-        );
     };
 
     /**
@@ -331,10 +309,10 @@ class Upload {
         if (this.#settings.debug)
             console.log(
                 '#' + this.#chunk.number.toString(),
-                this.#getNumberFormatted((this.#chunk.size.base / 1024).toFixed()).padStart(8) + ' KБ',
-                this.#getNumberFormatted((this.#chunk.size.value / 1024).toFixed()).padStart(8) + ' KБ',
-                this.#getNumberFormatted((speed / 1024).toFixed()).padStart(8) + ' KБ/с',
-                this.#getNumberFormatted(interval.toFixed(3)).padStart(8) + ' c'
+                this.#formatNumber((this.#chunk.size.base / 1024).toFixed()).padStart(8) + ' KБ',
+                this.#formatNumber((this.#chunk.size.value / 1024).toFixed()).padStart(8) + ' KБ',
+                this.#formatNumber((speed / 1024).toFixed()).padStart(8) + ' KБ/с',
+                this.#formatNumber(interval.toFixed(3)).padStart(8) + ' c'
             );
         if (this.#chunk.size.coefficient === 2) {
             if ((interval < this.#settings.interval) && (speed > this.#chunk.speed)) {
@@ -347,5 +325,33 @@ class Upload {
         }
         this.#chunk.speed = speed;
         this.#chunk.size.coefficient = 3 - this.#chunk.size.coefficient;
+    };
+
+    /**
+     * Додає до числа пробіли між тисячами
+     * @param {number|string} value - Невідформатоване число
+     * returns {string} - Відформатоване число
+     */
+    #formatNumber = (value) => {
+        return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    };
+
+    /**
+     * Повертає мітку часу з врахуванням часової зони
+     * returns {number} - Мітка часу, секунди
+     */
+    #getTime = () => {
+        return Math.round(
+            ((new Date()).getTime() / 1000) - ((new Date()).getTimezoneOffset() * 60)
+        );
+    };
+
+    /**
+     * Призупиняє виконання скрипта на вказаний час
+     * @param {number} delay - Час затримки, секунди
+     * returns {Promise}
+     */
+    #wait = async (delay) => {
+        return new Promise(resolve => {setTimeout(resolve, delay * 1000)});
     };
 }
