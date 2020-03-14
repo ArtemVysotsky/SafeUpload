@@ -217,17 +217,16 @@ class Upload {
         const url = this.#settings.url + '?action=' + this.#request.action + '&name=' + this.#file.name;
         let response = await this.#fetchExtended(url, {method: 'POST', body: this.#request.data});
         if (!response) return;
+        if (!response.ok)
+            this.#callbacks.reject(Error('Запит повернув статус помилки'));
         this.#request.data = null;
         this.#callbacks.iteration(this.#getStatus());
         let responseJSON;
         try {
             responseJSON = await response.json();
-            if (!response.ok) {
+            if (responseJSON.error) {
                 if (this.#settings.debug) console.error(responseJSON);
-                let message = (response.status === 500)
-                    ? ((responseJSON.error !== undefined) ? responseJSON.error : response.statusText)
-                    : 'Під час виконання запиту "' + this.#request.action + '" виникла помилка';
-                this.#callbacks.reject(Error(message));
+                this.#callbacks.reject(Error(responseJSON.error));
             }
         } catch (e) {
             if (this.#settings.debug) console.error(response);
@@ -245,28 +244,138 @@ class Upload {
      * @throws {Error} - Неправильний формат відповіді сервера
      */
     #fetchExtended = async (url, body, retry = 1) => {
-        let timer = null;
-        const fetchPromise = fetch(url, body);
-        const timeoutPromise =  new Promise(resolve =>
-            (timer = setTimeout(resolve, this.#settings.timeout * 1000))
-        );
-        let response = await Promise.race([fetchPromise, timeoutPromise]);
+        let response;
+        try {
+            const fetchPromise = fetch(url, body);
+            const timeoutPromise =  new Promise(resolve =>
+                (setTimeout(resolve, this.#settings.timeout * 1000))
+            );
+            response = await Promise.race([fetchPromise, timeoutPromise]);
+            if (response) {
+                return response;
+            } else {
+                console.error(`Перевищено час виконання запиту (${this.#settings.timeout})`);
+            }
+            //clearTimeout(timer);
+        } catch (e) {
+            console.error(`Під час виконання запиту виникла помилка (${e.message})`);
+        }
+        if (retry <= this.#settings.retryLimit) {
+            console.warn('Повторний запит #' + retry);
+            await this.#wait(this.#settings.retryDelay);
+            return this.#fetchExtended(url, body, ++ retry);
+            //if (this.#settings.debug) console.log({response: response});
+        } else {
+            this.pause();
+            this.#callbacks.pause();
+            this.#callbacks.timeout();
+        }
+    };
+
+    /**
+     * Готує запит до сервера та витягує дані з відповіді
+     * @param {number} retry  - Номер повторного запиту
+     * @returns {object} - Відформатована відповідь сервера
+     * @throws {Error} - Неправильний формат відповіді сервера
+     * @see this.#request
+    #send = async (retry = 1) => {
+        let response, responseJSON, timer = null, error = false;
+        const url = this.#settings.url + '?action=' + this.#request.action + '&name=' + this.#file.name;
+        try {
+            const fetchPromise = fetch(url, {method: 'POST', body: this.#request.data});
+            const timeoutPromise =  new Promise(resolve =>
+                (timer = setTimeout(resolve, this.#settings.timeout * 1000))
+            );
+            response = await Promise.race([fetchPromise, timeoutPromise]);
+        } catch (e) {
+            console.warn('Помилка при виконанні запиту (${e.message})');
+        }
         if (response) {
             clearTimeout(timer);
-        } else {
+            if (!response.ok) {
+                if (this.#settings.debug) console.error(responseJSON);
+                let message = (response.status === 500)
+                    ? ((responseJSON.error !== undefined) ? responseJSON.error : response.statusText)
+                    : 'Під час виконання запиту "' + this.#request.action + '" виникла помилка';
+                this.#callbacks.reject(Error(message));
+                console.warn('Неправильний формат відповіді сервера (${message})');
+            }
+            try {
+                responseJSON = await response.json();
+                this.#request.data = null;
+                this.#callbacks.iteration(this.#getStatus());
+            } catch (e) {
+                console.warn('Неправильний формат відповіді сервера (${e.message})');
+            }
+         }
+        if (!responseJSON) {
             if (retry <= this.#settings.retryLimit) {
                 if (this.#settings.debug)
                     console.warn('Повторний запит #' + retry);
                 await this.#wait(this.#settings.retryDelay);
-                response = await this.#fetchExtended(url, body, ++ retry);
-                if (this.#settings.debug) console.log({response: response});
+                responseJSON = await this.#send(++ retry);
+                //if (this.#settings.debug) console.log({response: response});
             } else {
                 this.pause();
                 this.#callbacks.timeout();
             }
         }
-        return response;
+        return responseJSON;
     };
+     */
+
+    /**
+     * Відправляє запит на сервер з таймаутом та повторними запитами при потребі
+     * @param {string} url - Адреса запиту
+     * @param {object} body - Дані запиту
+     * @param {number} retry  - Номер повторного запиту
+     * @returns {Response} - Відповідь сервера при наявності
+     * @throws {Error} - Неправильний формат відповіді сервера
+    #fetchExtended2 = async (url, body, retry = 1) => {
+        let response, responseJSON, timer = null;
+        try {
+            const fetchPromise = fetch(url, body);
+            const timeoutPromise =  new Promise(resolve =>
+                (timer = setTimeout(resolve, this.#settings.timeout * 1000))
+            );
+            response = await Promise.race([fetchPromise, timeoutPromise]);
+        } catch (e) {
+            if (this.#settings.debug)
+                console.warn('Помилка при виконанні запиту (${e.message}');
+        }
+        if (response) {
+            clearTimeout(timer);
+            try {
+                responseJSON = await response.json();
+                this.#request.data = null;
+            } catch (e) {
+                if (this.#settings.debug)
+                    console.warn('Неправильний формат відповіді сервера (${e.message}');
+            }
+        }
+        if (!responseJSON) {
+            if (retry <= this.#settings.retryLimit) {
+                if (this.#settings.debug)
+                    console.warn('Повторний запит #' + retry);
+                await this.#wait(this.#settings.retryDelay);
+                responseJSON = await this.#fetchExtended(url, body, ++ retry);
+                //if (this.#settings.debug) console.log({response: response});
+            } else {
+                this.pause();
+                this.#callbacks.timeout();
+                if (!response.ok) {
+                    if (this.#settings.debug) console.error(responseJSON);
+                    let message = (response.status === 500)
+                        ? ((responseJSON.error !== undefined) ? responseJSON.error : response.statusText)
+                        : 'Під час виконання запиту "' + this.#request.action + '" виникла помилка';
+                    this.#callbacks.reject(Error(message));
+                }
+            }
+        }
+        return responseJSON;
+    };
+     */
+
 
     /**
      * Вираховує та повертає дані про статус процесу завантаження файлу

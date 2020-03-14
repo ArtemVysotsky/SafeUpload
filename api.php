@@ -53,6 +53,7 @@ try {
 
     echo json_encode($response, JSON_UNESCAPED_UNICODE);
 
+
 } catch (Exception $exception) {
 
     if (isset($file) && is_object($file) && isset($_POST['hash']))

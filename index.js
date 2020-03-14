@@ -46,8 +46,6 @@ callbacks = {
         nodes.buttons.pause.disabled = true;
     },
     timeout: () => { // дії при відсутності відповіді від сервера
-        nodes.buttons.resume.disabled = false;
-        nodes.buttons.pause.disabled = true;
         alert('Сервер не відповідає, спробуйте пізніше');
     },
     resolve: () => { // дії при закінчені процесу завантаження файла
@@ -67,7 +65,7 @@ nodes.buttons.file.addEventListener('change', function() {
         if (this.files[0] === undefined) return false;
         upload = new Upload(this.files[0], callbacks, {
             url: 'api.php', chunkSizeMaximum: 32 * 1024 * 1024, fileSizeLimit: 3 * 1024 * 1024 * 1024,
-            interval: 1, timeout: 5, retryLimit: 3, retryInterval: 0, debug: /debug=true/.test(window.location.search)
+            interval: 1, timeout: 5, retryLimit: 3, retryDelay: 5, debug: /debug=true/.test(window.location.search)
         });
         nodes.buttons.upload.disabled = false;
         nodes.indicators.speed.innerHTML = null;
@@ -110,8 +108,8 @@ const error = (e) => {
     nodes.buttons.pause.disabled = true;
     nodes.buttons.resume.disabled = true;
     nodes.buttons.cancel.disabled = true;
-    console.error(e);
     alert('Помилка: ' + e.message);
+    throw e;
 };
 
 /** Змінює вигляд деяких велечини в зручний для людини формат */
