@@ -2,7 +2,7 @@
  * Головний скрипт
  *
  * @author      Артем Висоцький <a.vysotsky@gmail.com>
- * @link        https://github.com/ArtemVysotsky/Upload
+ * @link        https://github.com/ArtemVysotsky/SafeUpload
  * @copyright   GNU General Public License v3
  */
 
@@ -63,7 +63,7 @@ let upload;
 nodes.buttons.file.addEventListener('change', function() {
     try {
         if (this.files[0] === undefined) return false;
-        upload = new Upload(this.files[0], callbacks, {
+        upload = new SafeUpload(this.files[0], callbacks, {
             url: 'api.php', chunkSizeMaximum: 32 * 1024 * 1024, fileSizeLimit: 3 * 1024 * 1024 * 1024,
             interval: 1, timeout: 5, retryLimit: 3, retryDelay: 5, debug: /debug=true/.test(window.location.search)
         });

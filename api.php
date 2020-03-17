@@ -3,7 +3,7 @@
  * API для керування процесом завантаження
  *
  * @author      Артем Висоцький <a.vysotsky@gmail.com>
- * @link        https://github.com/ArtemVysotsky/Upload
+ * @link        https://github.com/ArtemVysotsky/SafeUpload
  * @copyright   GNU General Public License v3
  */
 
