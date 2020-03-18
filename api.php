@@ -9,12 +9,7 @@
 
 /** ToDo: Перевірити роботу при помилках */
 /** ToDo: Перевірити видалення файла при помилці */
-
-/*
-error_reporting(0);
-ini_set('display_errors', '0');
-ini_set('display_startup_errors', '0');
-*/
+//sleep(10);
 
 set_error_handler('errorHandler');
 
@@ -100,9 +95,13 @@ function error($message, $file, $line, $type) {
 
     header('HTTP/1.x 500 Internal Server Error');
 
-    echo json_encode(['error' => $message], JSON_UNESCAPED_UNICODE);
+    $error = sprintf('%s (%s:%d, %d)', $message, $file, $line, $type);
 
-    $error = sprintf('%s  %s (%s:%d, %d)', date('Y-m-d H:i:s'), $message, $file, $line, $type);
+    echo json_encode(['error' => $error], JSON_UNESCAPED_UNICODE);
 
-    file_put_contents(__DIR__ . '/log', $error . "\r\n", FILE_APPEND);
+    $log = sprintf("%s  %s\r\n", date('Y-m-d H:i:s'), $error);
+
+    file_put_contents(__DIR__ . '/log', $log, FILE_APPEND);
+
+    exit();
 }

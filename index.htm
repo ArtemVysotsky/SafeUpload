@@ -17,7 +17,6 @@
         <style>
             main div.card {max-width: 480px;}
             main div.card form div.progress {height: 30px;}
-            main div.card form div.status {height: 13px; display: flex; justify-content: space-between;}
         </style>
         <script defer src="SafeUpload.js?v=2"></script>
         <script defer src="index.js?v=2"></script>
@@ -30,10 +29,10 @@
                     <form>
                         <div class="file mt-2"><input type="file" name="file" /></div>
                         <div class="progress mt-4"><div class="progress-bar"></div></div>
-                        <div class="status small mt-1">
-                            <span class="size" title="Завантажено / загальний розмір"></span>
-                            <span class="speed" title="Швидкість завантаження"></span>
-                            <span class="time" title="Часу пройшло / лишилось"></span>
+                        <div class="status row small mt-2">
+                            <div class="size col text-left" title="Завантажено / загальний розмір">&nbsp;</div>
+                            <div class="speed col text-center" title="Швидкість завантаження">&nbsp;</div>
+                            <div class="time col text-right" title="Часу пройшло / лишилось">&nbsp;</div>
                         </div>
                         <div class="control mt-4">
                             <input type="button" name="upload" value="Upload" disabled="disabled" class="btn btn-primary upload" />

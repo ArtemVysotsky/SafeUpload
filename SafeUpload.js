@@ -7,6 +7,7 @@
  */
 
 /** ToDo: Перевірити роботу відновлення завантаження */
+/** ToDo: Перевірити роботу помилок */
 /** ToDo: Відрефакторити код */
 
 class SafeUpload {
@@ -25,7 +26,7 @@ class SafeUpload {
      */
     #settings = {
         url: 'api', chunkSizeMinimum: 1024, chunkSizeMaximum: 1024 * 1024, fileSizeLimit: 1024 * 1024,
-        interval: 1, timeout: 5, retryLimit: 5, retryDelay: 1, debug: false
+        interval: 1, timeout: 5, retryLimit: 5, retryDelay: 1
     };
 
     /** @property {File} #file - Об'єкт файлу */
@@ -51,8 +52,9 @@ class SafeUpload {
      * @property {object}   #request        - Запит до сервера
      * @property {string}   #request.action - Тип запиту
      * @property {object}   #request.data   - Дані запиту
+     * @property {boolean}  #request.retry  - Ознака виконання повторних запитів
      */
-    #request = {action: null, data: null};
+    #request = {action: null, data: null, retry: true};
 
     /**
      * @property {object} #timers           - Мітки часу
@@ -84,7 +86,7 @@ class SafeUpload {
      */
     constructor(file, callbacks = {}, settings = {}) {
         this.#settings = {... this.#settings, ... settings};
-        if (this.#settings.debug) console.log({settings: this.#settings});
+        console.debug({settings: this.#settings});
         if (file.size > this.#settings.fileSizeLimit)
             throw new Error('Розмір файлу більше дозволеного');
         this.#file = file;
@@ -122,7 +124,7 @@ class SafeUpload {
      * Скасовує процес завантаження файлу на сервер
      */
     async cancel() {
-        if (!this.#timers.pause) {
+        if (this.#timers.pause) {
             await this.#remove();
         } else {
             this.#timers.stop = this.#getTime();
@@ -147,16 +149,16 @@ class SafeUpload {
      * @see this.#request
      */
     #append = async () => {
-        this.#request.action = 'append';
         if (this.#timers.pause) {
             this.#callbacks.pause();
             this.#chunk.speed = 0;
             return;
         }
         if (this.#timers.stop) {
-            this.#remove();
+            await this.#remove();
             return;
         }
+        this.#request.action = 'append';
         this.#chunk.number ++;
         this.#chunk.size.value =
             this.#chunk.size.base * this.#chunk.size.coefficient;
@@ -172,9 +174,9 @@ class SafeUpload {
         this.#chunk.offset = response.size;
         this.#sizing();
         if (this.#chunk.offset < this.#file.size) {
-            this.#append();
+            await this.#append();
         } else {
-            this.#close();
+            await this.#close();
         }
     };
 
@@ -203,34 +205,36 @@ class SafeUpload {
      */
     #remove = async () => {
         this.#request.action = 'remove';
-        this.#request.data = (new FormData()).append('hash', this.#hash);
+        this.#request.data = new FormData();
+        this.#request.data.append('hash', this.#hash);
+        this.#request.retry = false;
         await this.#send();
     };
 
     /**
      * Готує запит до сервера та витягує дані з відповіді
-     * @returns {object} - Відформатована відповідь сервера
+     * @returns {object|void} - Відформатована відповідь сервера
      * @throws {Error} - Неправильний формат відповіді сервера
      * @see this.#request
      */
     #send = async () => {
-        const url = this.#settings.url + '?action=' + this.#request.action + '&name=' + this.#file.name;
-        let response = await this.#fetchExtended(url, {method: 'POST', body: this.#request.data});
+        let url = this.#settings.url + '?action=' + this.#request.action + '&name=' + this.#file.name;
+        let body = {method: 'POST', body: this.#request.data};
+        let retry = (this.#request.retry) ? 1 : 0;
+        let response = await this.#fetchExtended(url, body, retry);
         if (!response) return;
-        if (!response.ok)
-            this.#callbacks.reject(Error('Запит повернув статус помилки'));
-        this.#request.data = null;
+//        this.#request.data = null;
         this.#callbacks.iteration(this.#getStatus());
         let responseJSON;
         try {
             responseJSON = await response.json();
-            if (responseJSON.error) {
-                if (this.#settings.debug) console.error(responseJSON);
-                this.#callbacks.reject(Error(responseJSON.error));
-            }
         } catch (e) {
-            if (this.#settings.debug) console.error(response);
+            console.error(response);
             throw new Error('Неправильний формат відповіді сервера');
+        }
+        if (responseJSON.error) {
+            console.error(responseJSON.error);
+            this.#callbacks.reject(Error('Внутрішня помилка сервера'));
         }
         return responseJSON;
     };
@@ -239,15 +243,15 @@ class SafeUpload {
      * Відправляє запит на сервер з таймаутом та повторними запитами при потребі
      * @param {string} url - Адреса запиту
      * @param {object} body - Дані запиту
-     * @param {number} retry  - Номер повторного запиту
-     * @returns {Response} - Відповідь сервера при наявності
+     * @param {number} retry [retry=1] - Номер повторного запиту, 0 - без повторів
+     * @returns {Response|void} - Відповідь сервера при наявності
      * @throws {Error} - Неправильний формат відповіді сервера
      */
     #fetchExtended = async (url, body, retry = 1) => {
         let response;
         try {
             const fetchPromise = fetch(url, body);
-            const timeoutPromise =  new Promise(resolve =>
+            const timeoutPromise = new Promise(resolve =>
                 (setTimeout(resolve, this.#settings.timeout * 1000))
             );
             response = await Promise.race([fetchPromise, timeoutPromise]);
@@ -256,15 +260,15 @@ class SafeUpload {
             } else {
                 console.error(`Перевищено час виконання запиту (${this.#settings.timeout})`);
             }
-            //clearTimeout(timer);
         } catch (e) {
             console.error(`Під час виконання запиту виникла помилка (${e.message})`);
         }
+        if (!retry) return;
+        if (this.#timers.stop) return;
         if (retry <= this.#settings.retryLimit) {
             console.warn('Повторний запит #' + retry);
             await this.#wait(this.#settings.retryDelay);
-            return this.#fetchExtended(url, body, ++ retry);
-            //if (this.#settings.debug) console.log({response: response});
+            return this.#fetchExtended(url, body, ++retry);
         } else {
             this.pause();
             this.#callbacks.pause();
@@ -310,14 +314,13 @@ class SafeUpload {
     #sizing = () => {
         let interval = ((new Date).getTime() - this.#timers.request) / 1000;
         let speed = Math.round(this.#chunk.value.size / interval);
-        if (this.#settings.debug)
-            console.log(
-                '#' + this.#chunk.number.toString(),
-                this.#formatNumber((this.#chunk.size.base / 1024).toFixed()).padStart(8) + ' KБ',
-                this.#formatNumber((this.#chunk.size.value / 1024).toFixed()).padStart(8) + ' KБ',
-                this.#formatNumber((speed / 1024).toFixed()).padStart(8) + ' KБ/с',
-                this.#formatNumber(interval.toFixed(3)).padStart(8) + ' c'
-            );
+        console.debug(
+            '#' + this.#chunk.number.toString(),
+            this.#formatNumber((this.#chunk.size.base / 1024).toFixed()).padStart(8) + ' KБ',
+            this.#formatNumber((this.#chunk.size.value / 1024).toFixed()).padStart(8) + ' KБ',
+            this.#formatNumber((speed / 1024).toFixed()).padStart(8) + ' KБ/с',
+            this.#formatNumber(interval.toFixed(3)).padStart(8) + ' c'
+        );
         if (this.#chunk.size.coefficient === 2) {
             if ((interval < this.#settings.interval) && (speed > this.#chunk.speed)) {
                 if ((this.#chunk.size.base * 2) < this.#settings.chunkSizeMaximum)

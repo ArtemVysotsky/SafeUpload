@@ -24,15 +24,15 @@ nodes.buttons = new function() {
 };
 nodes.indicators = new function() {
     this.progress = nodes.form.progress.querySelector('div.progress-bar');
-    this.size = nodes.form.status.querySelector('span.size');
-    this.speed = nodes.form.status.querySelector('span.speed');
-    this.time = nodes.form.status.querySelector('span.time');
+    this.size = nodes.form.status.querySelector('div.size');
+    this.speed = nodes.form.status.querySelector('div.speed');
+    this.time = nodes.form.status.querySelector('div.time');
 };
 
 /* Реакції на різні дії процесу завантаження файла */
 let callbacks;
 callbacks = {
-    iteration: (status) => { // дії при кожній ітерації процесу завантаження файла
+    iteration: (status) => {
         nodes.indicators.progress.innerHTML =  status.size.percent +'%';
         nodes.indicators.progress.style.width = status.size.percent + '%';
         nodes.indicators.size.innerHTML =
@@ -41,21 +41,22 @@ callbacks = {
         nodes.indicators.time.innerHTML =
             Human.getInterval(status.time.elapsed) + ' / ' + Human.getInterval(status.time.estimate);
     },
-    pause: () => { // дії при призупиненні процесу завантаження файла
+    pause: () => {
         nodes.buttons.resume.disabled = false;
         nodes.buttons.pause.disabled = true;
+
     },
-    timeout: () => { // дії при відсутності відповіді від сервера
+    timeout: () => {
         alert('Сервер не відповідає, спробуйте пізніше');
     },
-    resolve: () => { // дії при закінчені процесу завантаження файла
+    resolve: () => {
         nodes.buttons.file.disabled = false;
         nodes.buttons.pause.disabled = true;
         nodes.buttons.resume.disabled = true;
         nodes.buttons.cancel.disabled = true;
         console.log('Завантаження файла завершено');
     },
-    reject: (e) => {error(e)} // дії при помилці
+    reject: (e) => {error(e)}
 };
 
 /* Реакції на різні дії користувача */
@@ -65,22 +66,23 @@ nodes.buttons.file.addEventListener('change', function() {
         if (this.files[0] === undefined) return false;
         upload = new SafeUpload(this.files[0], callbacks, {
             url: 'api.php', chunkSizeMaximum: 32 * 1024 * 1024, fileSizeLimit: 3 * 1024 * 1024 * 1024,
-            interval: 1, timeout: 5, retryLimit: 3, retryDelay: 5, debug: /debug=true/.test(window.location.search)
+            interval: 1, timeout: 3, retryLimit: 3, retryDelay: 1
         });
         nodes.buttons.upload.disabled = false;
-        nodes.indicators.speed.innerHTML = null;
-        nodes.indicators.time.innerHTML = null;
+        nodes.indicators.size.innerHTML = '&nbsp;';
+        nodes.indicators.speed.innerHTML = '&nbsp;';
+        nodes.indicators.time.innerHTML = '&nbsp;';
         nodes.indicators.progress.style.width = '0';
         nodes.indicators.progress.innerHTML = null;
     } catch (e) {error(e)}
 });
 nodes.buttons.upload.addEventListener('click', async () => {
     try {
-        await upload.start();
         nodes.buttons.file.disabled = true;
         nodes.buttons.upload.disabled = true;
         nodes.buttons.pause.disabled = false;
         nodes.buttons.cancel.disabled = false;
+        await upload.start();
     } catch (e) {error(e)}
 });
 nodes.buttons.pause.addEventListener('click', () => upload.pause());
@@ -108,7 +110,7 @@ const error = (e) => {
     nodes.buttons.pause.disabled = true;
     nodes.buttons.resume.disabled = true;
     nodes.buttons.cancel.disabled = true;
-    alert('Помилка: ' + e.message);
+    alert(e.message);
     throw e;
 };
 
