@@ -29,106 +29,129 @@ class SafeUpload {
         interval: 1, timeout: 5, retryLimit: 5, retryDelay: 1
     };
 
-    /** @property {File} #file - Об'єкт файлу */
-    #file;
-
-    /** @property {string} #hash - Тимчасовий хеш файлу */
-    #hash;
+    /**
+     * @property {object} #files                - Перелік FileList з файлами File та додатковими параметрами
+     * @property {object} #files.list           - Перелік FileList
+     * @property {number} #files.size           - Дані про розмір всіх файлів, байти
+     * @property {number} #files.size.uploaded  - Загальний розмір всіх файлів, байти
+     * @property {number} #files.size.total     - Загальний розмір всіх файлів, байти
+     * @property {number} #files.current        - Номер поточного файлу
+     */
+    #files = {list: {}, size: {uploaded: 0, total: 0}, current: 0};
 
     /**
-     * @property {object}   #chunk                  - Дані фрагмента файлу
+     * @property {object} #file                 - Файл File зі вмістимим та додатковими параметрами
+     * @property {string} #file.name            - Назва файлу
+     * @property {string} #file.type            - Тип файлу
+     * @property {number} #file.size            - Розмір файлу, байти
+     * @property {string} #file.hash            - Хеш файлу
+     * @property {number} #file.lastModified    - Дата останньої зміни файлу, мілісекунди
+     */
+    #file = {name: '', type: '', size: 0, hash: '', lastModified: 0};
+
+    /**
      * @property {number}   #chunk.number           - Порядковий номер фрагмента файлу
      * @property {number}   #chunk.offset           - Зміщення від початку файлу, байти
-     * @property {object}   #chunk.size             - Дані розміру фрагмента файлу, байти
      * @property {number}   #chunk.size.base        - Розмір бази фрагмента файлу, байти
-     * @property {number}   #chunk.size.value       - Поточний розмір фрагмента файлу, байти
+     * @property {number}   #chunk.size.value       - Плановий розмір фрагмента файлу, байти
      * @property {number}   #chunk.size.coefficient - Коефіцієнт розміру фрагмента файлу (1|2)
      * @property {File}     #chunk.value            - Вміст фрагмента файлу (File)
-     * @property {number}   #chunk.speed            - Швидкість виконання запиту, байти/с
+     * @property {number}   #chunk.size             - Фактичний розмір фрагмента файлу, байти
+     * @property {string}   #chunk.type             - Тип фрагмента файлуґ
      */
-    #chunk = {number: 0, offset: 0, size: {base: 0, value: 0, coefficient: 1}, value: null, speed: 0};
+    #chunk = {number: 0, offset: 0, size: {base: 0, value: 0, coefficient: 1}, value: {size: 0, type: ''}};
 
     /**
      * @property {object}   #request        - Запит до сервера
      * @property {string}   #request.action - Тип запиту
      * @property {object}   #request.data   - Дані запиту
+     * @property {number}   #request.time   - Час виконання запиту, мс
+     * @property {number}   #request.speed  - Швидкість виконання запиту, Б/с
      * @property {boolean}  #request.retry  - Ознака виконання повторних запитів
      */
-    #request = {action: null, data: null, retry: true};
+    #request = {action: '', data: {}, time: 0, speed: 0, retry: true};
 
     /**
-     * @property {object} #timers           - Мітки часу
-     * @property {number} #timers.start     - Час початку завантаження, секунди
-     * @property {number} #timers.pause     - Час призупинки завантаження, секунди
-     * @property {number} #timers.stop      - Час зупинки завантаження, секунди
-     * @property {number} #timers.request   - Час перед початком виконання запиту, мілісекунди
-     * @property {number} #timers.status    - Час попереднього запиту індикаторів процесу завантаження файлу, секунди
+     * @property {object} #events           - Ознаки деяких дій
+     * @property {boolean} #events.pause    - Ознака призупинки завантаження
+     * @property {boolean} #events.stop     - Ознака зупинки завантаження
      */
-    #timers = {start: null, pause: null, stop: null, request: null, status: null};
+    #events = {pause: false, stop: false};
 
     /**
      * @property {object} #callbacks                - Зворотні функції
-     * @property {function} #callbacks.iteration    - Дії при виконанні кожного запита на сервер
+     * @property {function} #callbacks.select       - Дії при виборі файлу
+     * @property {function} #callbacks.start        - Дії при запуску процесу завантаження файлу
      * @property {function} #callbacks.pause        - Дії при призупинені процесу завантаження файлу
+     * @property {function} #callbacks.resume       - Дії при продовжені процесу завантаження файлу
+     * @property {function} #callbacks.stop         - Дії при зупинці процесу завантаження файлу
+     * @property {function} #callbacks.iteration    - Дії при виконанні кожного запита на сервер
      * @property {function} #callbacks.timeout      - Дії при відсутності відповіді від сервера
      * @property {function} #callbacks.resolve      - Дії при завершені процесу завантаження файлу
      * @property {function} #callbacks.reject       - Дії при винекненні помилки під час процесу
      */
     #callbacks = {
-        iteration: () => {}, pause: () => {}, timeout: () => {}, resolve: () => {}, reject: () => {}
+        select:() => {}, start:() => {}, pause: () => {}, resume: () => {}, stop: () => {},
+        iteration: () => {}, timeout: () => {}, resolve: () => {}, reject: () => {}
     };
 
     /**
      * Конструктор
-     * @param {File} file - Обє'ект з даними файлу
-     * @param {object} callbacks - Зворотні функції
-     * @param {object} settings - Налаштування
+     * @param {object} files - Перелік FileList з файлами File
+     * @param {object} [callbacks] - Зворотні функції
+     * @param {object} [settings] - Налаштування
      */
-    constructor(file, callbacks = {}, settings = {}) {
-        this.#settings = {... this.#settings, ... settings};
+    constructor(files, settings = {}, callbacks = {}) {
+        this.#files.list = files;
+        for(let i = 0; i < this.#files.list.length; i ++)
+            this.#files.size.total += this.#files.list[i].size;
+        console.debug({files: this.#files});
+        this.#settings = {...this.#settings, ...settings};
         console.debug({settings: this.#settings});
-        if (file.size > this.#settings.fileSizeLimit)
-            throw new Error('Розмір файлу більше дозволеного');
-        this.#file = file;
-        this.#callbacks = {...callbacks};
+        this.#callbacks = {...this.#callbacks, ...callbacks};
+        console.debug({callbacks: this.#callbacks});
+        this.#callbacks.select();
     }
 
     /**
      * Починає процес завантаження файлу на сервер
      */
     async start() {
-        this.#timers.start = this.#getTime();
         await this.#open();
+        this.#callbacks.start();
     }
 
     /**
      * Призупиняє процес завантаження файлу на сервер
      */
-    pause() {this.#timers.pause = this.#getTime()}
+    pause() {
+        this.#events.pause = true;
+        this.#callbacks.pause();
+    }
 
     /**
      * Продовжує процес завантаження файлу на сервер
      */
     async resume() {
-        this.#timers.start =
-            this.#getTime() - (this.#timers.pause - this.#timers.start);
-        this.#timers.pause = null;
+        this.#events.pause = null;
         switch (this.#request.action) {
             case 'open': this.#open(); break;
             case 'append': this.#append(); break;
             case 'close': this.#close(); break;
         }
+        this.#callbacks.resume();
     }
 
     /**
      * Скасовує процес завантаження файлу на сервер
      */
     async cancel() {
-        if (this.#timers.pause) {
+        if (this.#events.pause) {
             await this.#remove();
         } else {
-            this.#timers.stop = this.#getTime();
+            this.#events.stop = true;
         }
+        this.#callbacks.stop();
     }
 
     /**
@@ -136,11 +159,14 @@ class SafeUpload {
      * @see this.#request
      */
     #open = async () => {
+        this.#file = this.#files.list[this.#files.current];
+        if (this.#file.size > this.#settings.fileSizeLimit)
+            throw new Error('Розмір файлу більше дозволеного');
         this.#request.action = 'open';
         this.#chunk.size.base = this.#settings.chunkSizeMinimum;
         const response = await this.#send();
         if (response === undefined) return;
-        this.#hash = response.hash;
+        this.#file.hash = response.hash;
         this.#append();
     };
 
@@ -149,12 +175,12 @@ class SafeUpload {
      * @see this.#request
      */
     #append = async () => {
-        if (this.#timers.pause) {
+        if (this.#events.pause) {
             this.#callbacks.pause();
-            this.#chunk.speed = 0;
+            this.#request.speed = 0;
             return;
         }
-        if (this.#timers.stop) {
+        if (this.#events.stop) {
             await this.#remove();
             return;
         }
@@ -165,14 +191,25 @@ class SafeUpload {
         this.#chunk.value =
             this.#file.slice(this.#chunk.offset, this.#chunk.offset + this.#chunk.size.value);
         this.#request.data = new FormData();
-        this.#request.data.append('hash', this.#hash);
+        this.#request.data.append('hash', this.#file.hash);
         this.#request.data.append('offset', this.#chunk.offset);
         this.#request.data.append('chunk', this.#chunk.value, this.#file.name);
-        this.#timers.request = (new Date).getTime();
         const response = await this.#send();
         if (response === undefined) return;
+        let speed = Math.round(this.#chunk.value.size / this.#request.time);
         this.#chunk.offset = response.size;
-        this.#sizing();
+        this.#files.size.uploaded += this.#chunk.value.size;
+        if (this.#chunk.size.coefficient === 2) {
+            if ((this.#request.time < this.#settings.interval) && (speed > this.#request.speed)) {
+                if ((this.#chunk.size.base * 2) < this.#settings.chunkSizeMaximum)
+                    this.#chunk.size.base *= 2;
+            } else {
+                if ((this.#chunk.size.base / 2) > this.#settings.chunkSizeMinimum)
+                    this.#chunk.size.base /= 2;
+            }
+        }
+        this.#request.speed = speed;
+        this.#chunk.size.coefficient = 3 - this.#chunk.size.coefficient;
         if (this.#chunk.offset < this.#file.size) {
             await this.#append();
         } else {
@@ -189,14 +226,18 @@ class SafeUpload {
         this.#request.action = 'close';
         this.#request.data = new FormData();
         this.#request.data.append('time', this.#file.lastModified);
-        this.#request.data.append('hash', this.#hash);
-        this.#chunk.speed = Math.round(this.#file.size / (this.#getTime() - this.#timers.start));
-        this.#chunk.size.value = Math.round(this.#file.size / this.#chunk.number);
+        this.#request.data.append('hash', this.#file.hash);
         const response = await this.#send();
         if (response === undefined) return;
         if (response.size !== this.#file.size)
             throw new Error('Неправильний розмір завантаженого файлу');
-        await this.#callbacks.resolve();
+        console.debug(`Файл ${this.#file.name} завантажено`);
+        this.#files.current ++;
+        if (this.#files.current < this.#files.list.length) {
+            this.#open();
+        } else {
+            this.#callbacks.resolve();
+        }
     };
 
     /**
@@ -206,7 +247,7 @@ class SafeUpload {
     #remove = async () => {
         this.#request.action = 'remove';
         this.#request.data = new FormData();
-        this.#request.data.append('hash', this.#hash);
+        this.#request.data.append('hash', this.#file.hash);
         this.#request.retry = false;
         await this.#send();
     };
@@ -221,9 +262,11 @@ class SafeUpload {
         let url = this.#settings.url + '?action=' + this.#request.action + '&name=' + this.#file.name;
         let body = {method: 'POST', body: this.#request.data};
         let retry = (this.#request.retry) ? 1 : 0;
+        this.#request.time = (new Date()).getTime();
         let response = await this.#fetchExtended(url, body, retry);
+        this.#request.time = ((new Date()).getTime() - this.#request.time) / 1000;
+        this.#request.data = null;
         if (!response) return;
-//        this.#request.data = null;
         this.#callbacks.iteration(this.#getStatus());
         let responseJSON;
         try {
@@ -264,14 +307,13 @@ class SafeUpload {
             console.error(`Під час виконання запиту виникла помилка (${e.message})`);
         }
         if (!retry) return;
-        if (this.#timers.stop) return;
+        if (this.#events.stop) return;
         if (retry <= this.#settings.retryLimit) {
             console.warn('Повторний запит #' + retry);
             await this.#wait(this.#settings.retryDelay);
             return this.#fetchExtended(url, body, ++retry);
         } else {
             this.pause();
-            this.#callbacks.pause();
             this.#callbacks.timeout();
         }
     };
@@ -279,78 +321,38 @@ class SafeUpload {
     /**
      * Вираховує та повертає дані про статус процесу завантаження файлу
      * @returns     {object}
-     * @property    {object} size           - Дані про розмір файлу
-     * @property    {number} size.bytes     - Розмір завантаженої частини файлу, байти
-     * @property    {number} size.percent   - Розмір завантаженої частини файлу, відсотки
-     * @property    {number} size.total     - Загальний розмір файлу, байти
-     * @property    {number} speed          - Швидкість завантаження, байти/секунду
-     * @property    {object} time           - Дані про час
-     * @property    {number} time.elapsed   - Минуло часу з початку процесу завантаження, секунди
-     * @property    {number} time.estimate  - Розрахунковий час закінчення процесу завантаження, секунди
+     * @property    {number} chunk.number           - Номер фрагмента файлу
+     * @property    {number} chunk.size             - Розмір фрагмента файлу
+     * @property    {number} chunk.speed            - Швидкість завантаження фрагмента файлу, байти/секунду
+     * @property    {number} current.number         - Номер поточного файлу
+     * @property    {number} current.name           - Назва поточного файлу
+     * @property    {number} current.size.uploaded  - Розмір завантаженої частини поточного файлу, байти
+     * @property    {number} current.size.total     - Загальний розмір поточного файлу, байти
+     * @property    {number} total.numbers          - Загальна кількість файлів
+     * @property    {number} total.size.uploaded    - Розмір завантаженої частини всіх файлів, байти
+     * @property    {number} total.size.total       - Загальний розмір всіх файлів, байти
      */
     #getStatus = () => {
-        let status = {speed: this.#chunk.speed, time: {}, size: {}};
-        status.time.elapsed = Math.round(this.#getTime() - this.#timers.start);
-        if (this.#chunk.speed > 0) {
-            status.time.estimate =
-                this.#file.size / (this.#chunk.offset / status.time.elapsed);
-            status.time.estimate =
-                Math.round(status.time.estimate - status.time.elapsed);
-        } else {
-            status.time.estimate = 0;
-        }
-        status.size = {
-            bytes: this.#chunk.offset,
-            percent: Math.round(this.#chunk.offset * 100 / this.#file.size),
-            total: this.#file.size
-        };
-        return status;
-    };
-
-    /**
-     * Визначає базовий розмір та коєфіцієнт для наступгого фрагмента файлу
-     * @see this.#chunk
-     */
-    #sizing = () => {
-        let interval = ((new Date).getTime() - this.#timers.request) / 1000;
-        let speed = Math.round(this.#chunk.value.size / interval);
-        console.debug(
-            '#' + this.#chunk.number.toString(),
-            this.#formatNumber((this.#chunk.size.base / 1024).toFixed()).padStart(8) + ' KБ',
-            this.#formatNumber((this.#chunk.size.value / 1024).toFixed()).padStart(8) + ' KБ',
-            this.#formatNumber((speed / 1024).toFixed()).padStart(8) + ' KБ/с',
-            this.#formatNumber(interval.toFixed(3)).padStart(8) + ' c'
-        );
-        if (this.#chunk.size.coefficient === 2) {
-            if ((interval < this.#settings.interval) && (speed > this.#chunk.speed)) {
-                if ((this.#chunk.size.base * 2) < this.#settings.chunkSizeMaximum)
-                    this.#chunk.size.base *= 2;
-            } else {
-                if ((this.#chunk.size.base / 2) > this.#settings.chunkSizeMinimum)
-                    this.#chunk.size.base /= 2;
+        return {
+            chunk: {
+                number: this.#chunk.number,
+                size: this.#chunk.value.size,
+                time: this.#request.time,
+                speed: this.#request.speed
+            },
+            current: {
+                number:  this.#files.current + 1,
+                name: this.#file.name,
+                size: {
+                    uploaded: this.#chunk.offset,
+                    total: this.#file.size
+                }
+            },
+            total: {
+                numbers: this.#files.list.length,
+                size: this.#files.size
             }
         }
-        this.#chunk.speed = speed;
-        this.#chunk.size.coefficient = 3 - this.#chunk.size.coefficient;
-    };
-
-    /**
-     * Додає до числа пробіли між тисячами
-     * @param {number|string} value - Невідформатоване число
-     * returns {string} - Відформатоване число
-     */
-    #formatNumber = (value) => {
-        return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-    };
-
-    /**
-     * Повертає мітку часу з врахуванням часової зони
-     * returns {number} - Мітка часу, секунди
-     */
-    #getTime = () => {
-        return Math.round(
-            ((new Date()).getTime() / 1000) - ((new Date()).getTimezoneOffset() * 60)
-        );
     };
 
     /**

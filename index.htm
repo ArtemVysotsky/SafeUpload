@@ -27,8 +27,12 @@
                 <div class="card-header">Безпечне завантаження файлів <span class="badge badge-danger">alpha</span></div>
                 <div class="card-body">
                     <form>
-                        <div class="file mt-2"><input type="file" name="file" /></div>
-                        <div class="progress mt-4"><div class="progress-bar"></div></div>
+                        <div class="file mt-2"><input type="file" name="file" multiple /></div>
+                        <div class="name small mt-4">&nbsp;</div>
+                        <div class="progresses mt-2">
+                            <div class="progress current mt-2"><div class="progress-bar"></div></div>
+                            <div class="progress total mt-2"><div class="progress-bar"></div></div>
+                        </div>
                         <div class="status row small mt-2">
                             <div class="size col text-left" title="Завантажено / загальний розмір">&nbsp;</div>
                             <div class="speed col text-center" title="Швидкість завантаження">&nbsp;</div>
