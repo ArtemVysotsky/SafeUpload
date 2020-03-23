@@ -6,9 +6,11 @@
  * @copyright   GNU General Public License v3
  */
 
-/** ToDo: Перевірити роботу відновлення завантаження */
-/** ToDo: Перевірити роботу помилок */
-/** ToDo: Відрефакторити код */
+/** ToDo: перевірити видалення файлу при помилці */
+/** ToDo: перевірити роботу відновлення завантаження */
+/** ToDo: спробувати забрати метод wait */
+/** ToDo: перевірити роботу помилок */
+/** ToDo: відрефакторити код */
 
 class SafeUpload {
     /**
@@ -25,19 +27,25 @@ class SafeUpload {
      * @property {number}   #settings.retryDelay         - Тривалість паузи між повторними запитами, секунди
      */
     #settings = {
-        url: 'api', chunkSizeMinimum: 1024, chunkSizeMaximum: 1024 * 1024, fileSizeLimit: 1024 * 1024,
-        interval: 1, timeout: 5, retryLimit: 5, retryDelay: 1
+        url: 'api',
+        chunkSizeMinimum: 1024,
+        chunkSizeMaximum: 1024 * 1024,
+        fileSizeLimit: 1024 * 1024,
+        interval: 1,
+        timeout: 5,
+        retryLimit: 5,
+        retryDelay: 1
     };
 
     /**
-     * @property {object} #files                - Перелік FileList з файлами File та додатковими параметрами
-     * @property {object} #files.list           - Перелік FileList
-     * @property {number} #files.size           - Дані про розмір всіх файлів, байти
-     * @property {number} #files.size.uploaded  - Загальний розмір всіх файлів, байти
-     * @property {number} #files.size.total     - Загальний розмір всіх файлів, байти
-     * @property {number} #files.current        - Номер поточного файлу
+     * @property {object} #fileList                - Перелік FileList з файлами File та додатковими параметрами
+     * @property {object} #fileList.files          - Перелік FileList
+     * @property {number} #fileList.size           - Дані про розмір всіх файлів, байти
+     * @property {number} #fileList.size.uploaded  - Загальний розмір всіх файлів, байти
+     * @property {number} #fileList.size.total     - Загальний розмір всіх файлів, байти
+     * @property {number} #fileList.current        - Номер поточного файлу
      */
-    #files = {list: {}, size: {uploaded: 0, total: 0}, current: 0};
+    #fileList = {files: {}, size: {uploaded: 0, total: 0}, current: 0};
 
     /**
      * @property {object} #file                 - Файл File зі вмістимим та додатковими параметрами
@@ -80,7 +88,7 @@ class SafeUpload {
 
     /**
      * @property {object} #callbacks                - Зворотні функції
-     * @property {function} #callbacks.select       - Дії при виборі файлу
+     * @property {function} #callbacks.choose       - Дії при виборі файлу
      * @property {function} #callbacks.start        - Дії при запуску процесу завантаження файлу
      * @property {function} #callbacks.pause        - Дії при призупинені процесу завантаження файлу
      * @property {function} #callbacks.resume       - Дії при продовжені процесу завантаження файлу
@@ -91,8 +99,8 @@ class SafeUpload {
      * @property {function} #callbacks.reject       - Дії при винекненні помилки під час процесу
      */
     #callbacks = {
-        select:() => {}, start:() => {}, pause: () => {}, resume: () => {}, stop: () => {},
-        iteration: () => {}, timeout: () => {}, resolve: () => {}, reject: () => {}
+        choose:() => {}, start:() => {}, pause: () => {}, resume: () => {}, stop: () => {},
+        iteration: () => {}, timeout: () => {}, resolve: () => {}, reject: () => {}, finally: () => {}
     };
 
     /**
@@ -102,15 +110,16 @@ class SafeUpload {
      * @param {object} [settings] - Налаштування
      */
     constructor(files, settings = {}, callbacks = {}) {
-        this.#files.list = files;
-        for(let i = 0; i < this.#files.list.length; i ++)
-            this.#files.size.total += this.#files.list[i].size;
-        console.debug({files: this.#files});
+        this.#fileList.files = files;
+        for(let i = 0; i < this.#fileList.files.length; i ++)
+            this.#fileList.size.total += this.#fileList.files[i].size;
+        console.debug({files: this.#fileList});
         this.#settings = {...this.#settings, ...settings};
         console.debug({settings: this.#settings});
         this.#callbacks = {...this.#callbacks, ...callbacks};
-        console.debug({callbacks: this.#callbacks});
-        this.#callbacks.select();
+        this.#callbacks.choose(this.#fileList.files.length);
+        this.#file = this.#fileList.files[0];
+        this.#callbacks.iteration(this.#getStatus());
     }
 
     /**
@@ -148,10 +157,11 @@ class SafeUpload {
     async cancel() {
         if (this.#events.pause) {
             await this.#remove();
+            this.#callbacks.stop();
+            this.#callbacks.finally();
         } else {
             this.#events.stop = true;
         }
-        this.#callbacks.stop();
     }
 
     /**
@@ -159,9 +169,8 @@ class SafeUpload {
      * @see this.#request
      */
     #open = async () => {
-        this.#file = this.#files.list[this.#files.current];
         if (this.#file.size > this.#settings.fileSizeLimit)
-            throw new Error('Розмір файлу більше дозволеного');
+            this.#error('Розмір файлу більше дозволеного');
         this.#request.action = 'open';
         this.#chunk.size.base = this.#settings.chunkSizeMinimum;
         const response = await this.#send();
@@ -182,6 +191,8 @@ class SafeUpload {
         }
         if (this.#events.stop) {
             await this.#remove();
+            this.#callbacks.stop();
+            this.#callbacks.finally();
             return;
         }
         this.#request.action = 'append';
@@ -198,7 +209,7 @@ class SafeUpload {
         if (response === undefined) return;
         let speed = Math.round(this.#chunk.value.size / this.#request.time);
         this.#chunk.offset = response.size;
-        this.#files.size.uploaded += this.#chunk.value.size;
+        this.#fileList.size.uploaded += this.#chunk.value.size;
         if (this.#chunk.size.coefficient === 2) {
             if ((this.#request.time < this.#settings.interval) && (speed > this.#request.speed)) {
                 if ((this.#chunk.size.base * 2) < this.#settings.chunkSizeMaximum)
@@ -219,7 +230,6 @@ class SafeUpload {
 
     /**
      * Закриває файл на сервері
-     * @throws {Error} - Неправельний розмір завантаженого файлу
      * @see this.#request
      */
     #close = async () => {
@@ -230,13 +240,15 @@ class SafeUpload {
         const response = await this.#send();
         if (response === undefined) return;
         if (response.size !== this.#file.size)
-            throw new Error('Неправильний розмір завантаженого файлу');
+            this.#error('Неправильний розмір завантаженого файлу');
         console.debug(`Файл ${this.#file.name} завантажено`);
-        this.#files.current ++;
-        if (this.#files.current < this.#files.list.length) {
+        this.#fileList.current ++;
+        if (this.#fileList.current < this.#fileList.files.length) {
+            this.#file = this.#fileList.files[this.#fileList.current];
             this.#open();
         } else {
             this.#callbacks.resolve();
+            this.#callbacks.finally();
         }
     };
 
@@ -255,7 +267,6 @@ class SafeUpload {
     /**
      * Готує запит до сервера та витягує дані з відповіді
      * @returns {object|void} - Відформатована відповідь сервера
-     * @throws {Error} - Неправильний формат відповіді сервера
      * @see this.#request
      */
     #send = async () => {
@@ -273,11 +284,11 @@ class SafeUpload {
             responseJSON = await response.json();
         } catch (e) {
             console.error(response);
-            throw new Error('Неправильний формат відповіді сервера');
+            this.#error('Неправильний формат відповіді сервера');
         }
         if (responseJSON.error) {
             console.error(responseJSON.error);
-            this.#callbacks.reject(Error('Внутрішня помилка сервера'));
+            this.#error('Внутрішня помилка сервера');
         }
         return responseJSON;
     };
@@ -341,7 +352,7 @@ class SafeUpload {
                 speed: this.#request.speed
             },
             current: {
-                number:  this.#files.current + 1,
+                number:  this.#fileList.current + 1,
                 name: this.#file.name,
                 size: {
                     uploaded: this.#chunk.offset,
@@ -349,8 +360,8 @@ class SafeUpload {
                 }
             },
             total: {
-                numbers: this.#files.list.length,
-                size: this.#files.size
+                number: this.#fileList.files.length,
+                size: this.#fileList.size
             }
         }
     };
@@ -362,5 +373,15 @@ class SafeUpload {
      */
     #wait = async (delay) => {
         return new Promise(resolve => {setTimeout(resolve, delay * 1000)});
+    };
+
+    /**
+     * Викидає код помилки
+     * @param {string} message - Час затримки, секунди
+     */
+    #error = (message) => {
+        this.#callbacks.reject(message);
+        this.#callbacks.finally();
+        throw new Error(message);
     };
 }
