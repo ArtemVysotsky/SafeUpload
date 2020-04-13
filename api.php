@@ -10,7 +10,6 @@
 /** ToDo: Перевірити роботу при помилках */
 /** ToDo: Перевірити видалення файла при помилці */
 
-
 set_error_handler('errorHandler');
 
 register_shutdown_function('shutdownHandler');

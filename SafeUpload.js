@@ -6,9 +6,8 @@
  * @copyright   GNU General Public License v3
  */
 
-/** ToDo: перевірити видалення файлу при помилці */
 /** ToDo: перевірити роботу відновлення завантаження */
-/** ToDo: спробувати забрати метод wait */
+/** ToDo: перевірити видалення файлу при помилці */
 /** ToDo: перевірити роботу помилок */
 /** ToDo: відрефакторити код */
 
@@ -29,8 +28,8 @@ class SafeUpload {
     #settings = {
         url: 'api',
         chunkSizeMinimum: 1024,
-        chunkSizeMaximum: 1024 * 1024,
-        fileSizeLimit: 1024 * 1024,
+        chunkSizeMaximum: 1024 ** 2,
+        fileSizeLimit: 1024 ** 2,
         interval: 1,
         timeout: 5,
         retryLimit: 5,
@@ -88,19 +87,14 @@ class SafeUpload {
 
     /**
      * @property {object} #callbacks                - Зворотні функції
-     * @property {function} #callbacks.choose       - Дії при виборі файлу
-     * @property {function} #callbacks.start        - Дії при запуску процесу завантаження файлу
      * @property {function} #callbacks.pause        - Дії при призупинені процесу завантаження файлу
-     * @property {function} #callbacks.resume       - Дії при продовжені процесу завантаження файлу
-     * @property {function} #callbacks.stop         - Дії при зупинці процесу завантаження файлу
      * @property {function} #callbacks.iteration    - Дії при виконанні кожного запита на сервер
      * @property {function} #callbacks.timeout      - Дії при відсутності відповіді від сервера
      * @property {function} #callbacks.resolve      - Дії при завершені процесу завантаження файлу
      * @property {function} #callbacks.reject       - Дії при винекненні помилки під час процесу
      */
     #callbacks = {
-        choose:() => {}, start:() => {}, pause: () => {}, resume: () => {}, stop: () => {},
-        iteration: () => {}, timeout: () => {}, resolve: () => {}, reject: () => {}, finally: () => {}
+        pause: () => {}, iteration: () => {}, timeout: () => {}, resolve: () => {}, reject: () => {}
     };
 
     /**
@@ -117,7 +111,6 @@ class SafeUpload {
         this.#settings = {...this.#settings, ...settings};
         console.debug({settings: this.#settings});
         this.#callbacks = {...this.#callbacks, ...callbacks};
-        this.#callbacks.choose(this.#fileList.files.length);
         this.#file = this.#fileList.files[0];
         this.#callbacks.iteration(this.#getStatus());
     }
@@ -126,8 +119,7 @@ class SafeUpload {
      * Починає процес завантаження файлу на сервер
      */
     async start() {
-        await this.#open();
-        this.#callbacks.start();
+        return await this.#open();
     }
 
     /**
@@ -135,20 +127,20 @@ class SafeUpload {
      */
     pause() {
         this.#events.pause = true;
-        this.#callbacks.pause();
     }
 
     /**
      * Продовжує процес завантаження файлу на сервер
      */
     async resume() {
+        let response = true;
         this.#events.pause = null;
         switch (this.#request.action) {
-            case 'open': this.#open(); break;
-            case 'append': this.#append(); break;
-            case 'close': this.#close(); break;
+            case 'open': response = await this.#open(); break;
+            case 'append': response = await this.#append(); break;
+            case 'close': await this.#close(); break;
         }
-        this.#callbacks.resume();
+        return response;
     }
 
     /**
@@ -156,9 +148,7 @@ class SafeUpload {
      */
     async cancel() {
         if (this.#events.pause) {
-            await this.#remove();
-            this.#callbacks.stop();
-            this.#callbacks.finally();
+            this.#remove();
         } else {
             this.#events.stop = true;
         }
@@ -174,9 +164,10 @@ class SafeUpload {
         this.#request.action = 'open';
         this.#chunk.size.base = this.#settings.chunkSizeMinimum;
         const response = await this.#send();
-        if (response === undefined) return;
+        if (response === undefined) return false;
         this.#file.hash = response.hash;
         this.#append();
+        return true;
     };
 
     /**
@@ -187,13 +178,11 @@ class SafeUpload {
         if (this.#events.pause) {
             this.#callbacks.pause();
             this.#request.speed = 0;
-            return;
+            return true;
         }
         if (this.#events.stop) {
             await this.#remove();
-            this.#callbacks.stop();
-            this.#callbacks.finally();
-            return;
+            return true;
         }
         this.#request.action = 'append';
         this.#chunk.number ++;
@@ -206,7 +195,7 @@ class SafeUpload {
         this.#request.data.append('offset', this.#chunk.offset);
         this.#request.data.append('chunk', this.#chunk.value, this.#file.name);
         const response = await this.#send();
-        if (response === undefined) return;
+        if (response === undefined) return false;
         let speed = Math.round(this.#chunk.value.size / this.#request.time);
         this.#chunk.offset = response.size;
         this.#fileList.size.uploaded += this.#chunk.value.size;
@@ -222,10 +211,11 @@ class SafeUpload {
         this.#request.speed = speed;
         this.#chunk.size.coefficient = 3 - this.#chunk.size.coefficient;
         if (this.#chunk.offset < this.#file.size) {
-            await this.#append();
+            this.#append();
         } else {
-            await this.#close();
+            this.#close();
         }
+        return true;
     };
 
     /**
@@ -248,7 +238,6 @@ class SafeUpload {
             this.#open();
         } else {
             this.#callbacks.resolve();
-            this.#callbacks.finally();
         }
     };
 
@@ -321,10 +310,13 @@ class SafeUpload {
         if (this.#events.stop) return;
         if (retry <= this.#settings.retryLimit) {
             console.warn('Повторний запит #' + retry);
-            await this.#wait(this.#settings.retryDelay);
+            await new Promise(resolve => {
+                setTimeout(resolve, this.#settings.retryDelay * 1000)
+            });
             return this.#fetchExtended(url, body, ++retry);
         } else {
             this.pause();
+            this.#callbacks.pause();
             this.#callbacks.timeout();
         }
     };
@@ -367,17 +359,8 @@ class SafeUpload {
     };
 
     /**
-     * Призупиняє виконання скрипта на вказаний час
-     * @param {number} delay - Час затримки, секунди
-     * returns {Promise}
-     */
-    #wait = async (delay) => {
-        return new Promise(resolve => {setTimeout(resolve, delay * 1000)});
-    };
-
-    /**
-     * Викидає код помилки
-     * @param {string} message - Час затримки, секунди
+     * Викидає помилку
+     * @param {string} message - Текст помилки
      */
     #error = (message) => {
         this.#callbacks.reject(message);

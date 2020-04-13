@@ -8,10 +8,21 @@
 
 let timers = {start: 0, pause: 0, iteration: 0};
 
+const settings = {
+    url: 'api.php', // Адреса API для завантаження файлу
+    chunkSizeMaximum: 16 * (1024 ** 2), // Максимальний розмір фрагмента файлу, байти
+    fileSizeLimit: 3 * (1024 ** 3), // Максимальний розмір файлу, байти
+    interval: 1, // Рекомендована тривалість запиту, секунди
+    timeout: 2, // Максимальна тривалість запиту, секунди
+    retryLimit: 3, // Максимальна кількість повторних запитів
+    retryDelay: 1 // Тривалість паузи між повторними запитами, секунди
+};
+
 /* Збережені посилання на елементи сторінки */
 let nodes = {};
+nodes.main = document.querySelector('main');
 nodes.modal = new function() {
-    this.self = document.querySelector('main .modal');
+    this.self = nodes.main.querySelector('.modal');
     this.header = this.self.querySelector('.modal-header');
     this.progresses = this.self.querySelector('.progresses');
     this.status = this.self.querySelector('.status');
@@ -34,36 +45,32 @@ nodes.buttons = new function() {
     this.cancel = nodes.modal.buttons.querySelector('.cancel');
     this.close = nodes.modal.header.querySelector('.close span');
 };
-nodes.modal.self.style.transition = 'opacity .5s';
+nodes.alert = nodes.main.querySelector('.alert');
+
+/* Керування мадольним вікном */
+const modal = new function() {
+    this.open = async () => {
+        nodes.buttons.file.disabled = true;
+        nodes.modal.self.style.transition = 'opacity .5s';
+        await sleep(0);
+        nodes.modal.self.classList.add('show');
+    };
+    this.close = async () => {
+        nodes.modal.self.classList.remove('show');
+        await sleep(parseFloat(nodes.modal.self.style.transitionDuration) * 1000);
+        nodes.modal.self.style.display = 'none';
+        nodes.buttons.file.disabled = false;
+        nodes.buttons.file.value = null;
+    };
+};
 
 /* Реакції на різні дії процесу завантаження файла */
 let callbacks = {};
-callbacks.choose = function(fileNumber) {
-    nodes.buttons.file.disabled = true;
-    nodes.modal.self.style.display = 'block';
-    setTimeout(() => {nodes.modal.self.classList.add('show')}, 100);
-    if (fileNumber === 1)
-        nodes.status.progress.current.parentElement.style.display = 'none';
-};
-callbacks.start = () => {
-    nodes.buttons.pause.style.display = 'block';
-    nodes.buttons.resume.style.display = 'none';
-    nodes.buttons.cancel.style.display = 'block';
-    timers.start = timers.iteration = (new Date()).getTime();
-};
 callbacks.pause = () => {
+    nodes.buttons.pause.disabled = false;
     nodes.buttons.pause.style.display = 'none';
     nodes.buttons.resume.style.display = 'block';
     timers.pause = (new Date()).getTime();
-};
-callbacks.resume = () => {
-    nodes.buttons.pause.style.display = 'block';
-    nodes.buttons.resume.style.display = 'none';
-    timers.start = (new Date()).getTime() - (timers.pause - timers.start);
-};
-callbacks.stop = async () => {
-    nodes.buttons.pause.style.display = 'none';
-    nodes.buttons.resume.style.display = 'none';
 };
 callbacks.iteration = (status) => {
     timers.iteration = (new Date()).getTime();
@@ -102,30 +109,50 @@ callbacks.iteration = (status) => {
     );
 };
 callbacks.timeout = () => {alert('Сервер не відповідає, спробуйте пізніше')};
-callbacks.resolve = () => {console.log('Всі файли завантажено')};
-callbacks.reject = (message) => {alert(message)};
-callbacks.finally = () => {
-    nodes.buttons.file.value = null;
-    nodes.buttons.file.disabled = false;
-    nodes.modal.self.classList.remove('show');
-    setTimeout(
-        () => {nodes.modal.self.style.display = 'none'},
-        parseFloat(nodes.modal.self.style.transitionDuration) * 1000);
+callbacks.resolve = async () => {
+    nodes.alert.classList.remove('d-none');
+    await modal.close();
+};
+callbacks.reject = async (message) => {
+    alert(message);
+    await modal.close();
 };
 
 /* Реакції на різні дії користувача */
 let upload;
 nodes.buttons.file.addEventListener('change', async function() {
     if (!this.files.length) return;
-    upload = await new SafeUpload(this.files, {
-        url: 'api.php', chunkSizeMaximum: 32 * 1024 * 1024, fileSizeLimit: 3 * 1024 * 1024 * 1024,
-        interval: 1, timeout: 3, retryLimit: 3, retryDelay: 1
-    }, callbacks);
-    await upload.start();
+    upload = await new SafeUpload(this.files, settings, callbacks);
+    nodes.buttons.pause.style.display = 'none';
+    nodes.buttons.resume.style.display = 'none';
+    nodes.modal.self.style.display = 'block';
+    nodes.status.progress.current.parentElement.style.display = (this.files.length === 1) ? 'none' : 'flex';
+    nodes.alert.classList.add('d-none');
+    await modal.open();
+    if (await upload.start()) {
+        nodes.buttons.pause.style.display = 'block';
+        timers.start = timers.iteration = (new Date()).getTime();
+    }
 });
-nodes.buttons.pause.addEventListener('click', async () => {await upload.pause()});
-nodes.buttons.resume.addEventListener('click', async () => {await upload.resume()});
-nodes.buttons.cancel.addEventListener('click', async () => {await upload.cancel()});
+nodes.buttons.pause.addEventListener('click', () => {
+    nodes.buttons.pause.disabled = true;
+    upload.pause();
+});
+nodes.buttons.resume.addEventListener('click', async () => {
+    nodes.buttons.resume.disabled = true;
+    if (await upload.resume()) {
+        nodes.buttons.pause.style.display = 'block';
+        nodes.buttons.resume.style.display = 'none';
+        timers.start = (new Date()).getTime() - (timers.pause - timers.start);
+    }
+    nodes.buttons.resume.disabled = false;
+});
+nodes.buttons.cancel.addEventListener('click', async () => {
+    nodes.buttons.cancel.disabled = true;
+    await upload.cancel();
+    nodes.buttons.cancel.disabled = false;
+    await modal.close();
+});
 
 /** Змінює вигляд деяких велечини в зручний для людини формат */
 class Human {
@@ -169,3 +196,6 @@ class Human {
     };
 }
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
