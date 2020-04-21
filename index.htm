@@ -20,7 +20,7 @@
             main div.modal div.progress {height: 30px;}
             main div.modal div.status button {width: 130px;}
         </style>
-        <script defer src="SafeUpload.js?v=2"></script>
+        <script defer src="Upload.js?v=2"></script>
         <script defer src="index.js?v=2"></script>
     </head>
     <body>
@@ -34,10 +34,8 @@
                     </div>
                 </div>
             </div>
-            <!-- Alert -->
-            <div class="alert alert-success mt-5 text-center d-none">Всі файли завантажено</div>
-            <!-- Modal -->
-            <div class="modal fade" tabindex="-1" role="dialog">
+            <!-- Modal Start -->
+            <div class="modal fade position-static mt-3" tabindex="-1">
                 <div class="modal-dialog" role="document">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -51,7 +49,7 @@
                             </div>
                             <div class="status small row mt-2">
                                 <div class="size col text-left" title="Завантажено / загальний розмір">&nbsp;</div>
-                                <div class="speed col text-center" title="Швидкість завантаження">&nbsp;</div>
+                                <div class="speed col-auto text-center" title="Швидкість завантаження">&nbsp;</div>
                                 <div class="time col text-right" title="Часу пройшло / лишилось">&nbsp;</div>
                             </div>
                         </div>
@@ -63,6 +61,7 @@
                     </div>
                 </div>
             </div>
+            <!-- Modal End -->
         </main>
     </body>
 </html>

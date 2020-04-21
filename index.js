@@ -6,66 +6,43 @@
  * @copyright   GNU General Public License v3
  */
 
-let timers = {start: 0, pause: 0, iteration: 0};
+let nodes = {}, callbacks = {}, upload, timers = {start: 0, pause: 0, iteration: 0};
 
 const settings = {
-    url: 'api.php', // Адреса API для завантаження файлу
-    chunkSizeMaximum: 16 * (1024 ** 2), // Максимальний розмір фрагмента файлу, байти
-    fileSizeLimit: 3 * (1024 ** 3), // Максимальний розмір файлу, байти
+    url: 'api.php', // Адреса API для збереження файлу на диск
+    chunkSizeMaximum: 16 * 1024 ** 2, // Максимальний розмір фрагмента файлу, байти
+    fileSizeLimit: 3 * 1024 ** 3, // Максимальний розмір файлу, байти
     interval: 1, // Рекомендована тривалість запиту, секунди
-    timeout: 2, // Максимальна тривалість запиту, секунди
+    timeout: 3, // Максимальна тривалість запиту, секунди
     retryLimit: 3, // Максимальна кількість повторних запитів
-    retryDelay: 1 // Тривалість паузи між повторними запитами, секунди
+    retryDelay: 3 // Тривалість паузи між повторними запитами, секунди
 };
 
 /* Збережені посилання на елементи сторінки */
-let nodes = {};
+nodes = {};
 nodes.main = document.querySelector('main');
-nodes.modal = new function() {
-    this.self = nodes.main.querySelector('.modal');
-    this.header = this.self.querySelector('.modal-header');
-    this.progresses = this.self.querySelector('.progresses');
-    this.status = this.self.querySelector('.status');
-    this.buttons = this.self.querySelector('.buttons');
-};
-nodes.status = new function() {
-    this.name = nodes.modal.self.querySelector('div.name');
-    this.progress = new function() {
-        this.current = nodes.modal.progresses.querySelector('.progress.current .progress-bar');
-        this.total = nodes.modal.progresses.querySelector('.progress.total .progress-bar');
-    };
-    this.size = nodes.modal.status.querySelector('.size');
-    this.speed = nodes.modal.status.querySelector('.speed');
-    this.time = nodes.modal.status.querySelector('.time');
-};
-nodes.buttons = new function() {
-    this.file = document.querySelector('main .card #file');
-    this.pause = nodes.modal.buttons.querySelector('.pause');
-    this.resume = nodes.modal.buttons.querySelector('.resume');
-    this.cancel = nodes.modal.buttons.querySelector('.cancel');
-    this.close = nodes.modal.header.querySelector('.close span');
-};
-nodes.alert = nodes.main.querySelector('.alert');
-
-/* Керування мадольним вікном */
-const modal = new function() {
-    this.open = async () => {
-        nodes.buttons.file.disabled = true;
-        nodes.modal.self.style.transition = 'opacity .5s';
-        await sleep(0);
-        nodes.modal.self.classList.add('show');
-    };
-    this.close = async () => {
-        nodes.modal.self.classList.remove('show');
-        await sleep(parseFloat(nodes.modal.self.style.transitionDuration) * 1000);
-        nodes.modal.self.style.display = 'none';
-        nodes.buttons.file.disabled = false;
-        nodes.buttons.file.value = null;
-    };
-};
+nodes.modal = {};
+nodes.modal.self = nodes.main.querySelector('.modal');
+nodes.modal.header = nodes.modal.self.querySelector('.modal-header');
+nodes.modal.progresses = nodes.modal.self.querySelector('.progresses');
+nodes.modal.status = nodes.modal.self.querySelector('.status');
+nodes.modal.buttons = nodes.modal.self.querySelector('.buttons');
+nodes.status = {};
+nodes.status.name = nodes.modal.self.querySelector('div.name');
+nodes.status.progress = {};
+nodes.status.progress.current = nodes.modal.progresses.querySelector('.progress.current .progress-bar');
+nodes.status.progress.total = nodes.modal.progresses.querySelector('.progress.total .progress-bar');
+nodes.status.size = nodes.modal.status.querySelector('.size');
+nodes.status.speed = nodes.modal.status.querySelector('.speed');
+nodes.status.time = nodes.modal.status.querySelector('.time');
+nodes.buttons = {};
+nodes.buttons.file = nodes.main.querySelector('.card #file');
+nodes.buttons.pause = nodes.modal.buttons.querySelector('.pause');
+nodes.buttons.resume = nodes.modal.buttons.querySelector('.resume');
+nodes.buttons.cancel = nodes.modal.buttons.querySelector('.cancel');
+nodes.buttons.close = nodes.modal.header.querySelector('.close span');
 
 /* Реакції на різні дії процесу завантаження файла */
-let callbacks = {};
 callbacks.pause = () => {
     nodes.buttons.pause.disabled = false;
     nodes.buttons.pause.style.display = 'none';
@@ -109,49 +86,44 @@ callbacks.iteration = (status) => {
     );
 };
 callbacks.timeout = () => {alert('Сервер не відповідає, спробуйте пізніше')};
-callbacks.resolve = async () => {
-    nodes.alert.classList.remove('d-none');
-    await modal.close();
-};
-callbacks.reject = async (message) => {
-    alert(message);
-    await modal.close();
+callbacks.resolve = async () => {console.log('Файли завантажено на сервер')};
+callbacks.reject = async (message) => {alert(message)};
+callbacks.finally = async () => {
+    nodes.modal.self.classList.remove('show');
+    await sleep(parseFloat(nodes.modal.self.style.transitionDuration) * 1000);
+    nodes.modal.self.style.display = 'none';
+    nodes.buttons.file.disabled = false;
+    nodes.buttons.file.value = null;
 };
 
 /* Реакції на різні дії користувача */
-let upload;
 nodes.buttons.file.addEventListener('change', async function() {
     if (!this.files.length) return;
-    upload = await new SafeUpload(this.files, settings, callbacks);
-    nodes.buttons.pause.style.display = 'none';
+    upload = new Upload(this.files, settings, callbacks);
+    nodes.buttons.file.disabled = true;
     nodes.buttons.resume.style.display = 'none';
+    nodes.modal.self.style.transition = 'opacity .5s';
     nodes.modal.self.style.display = 'block';
     nodes.status.progress.current.parentElement.style.display = (this.files.length === 1) ? 'none' : 'flex';
-    nodes.alert.classList.add('d-none');
-    await modal.open();
-    if (await upload.start()) {
-        nodes.buttons.pause.style.display = 'block';
-        timers.start = timers.iteration = (new Date()).getTime();
-    }
+    await sleep(0);
+    nodes.modal.self.classList.add('show');
+    upload.start();
+    timers.start = timers.iteration = (new Date()).getTime();
 });
 nodes.buttons.pause.addEventListener('click', () => {
     nodes.buttons.pause.disabled = true;
     upload.pause();
 });
-nodes.buttons.resume.addEventListener('click', async () => {
-    nodes.buttons.resume.disabled = true;
-    if (await upload.resume()) {
-        nodes.buttons.pause.style.display = 'block';
-        nodes.buttons.resume.style.display = 'none';
-        timers.start = (new Date()).getTime() - (timers.pause - timers.start);
-    }
-    nodes.buttons.resume.disabled = false;
+nodes.buttons.resume.addEventListener('click', () => {
+    upload.resume();
+    nodes.buttons.pause.style.display = 'block';
+    nodes.buttons.resume.style.display = 'none';
+    timers.start = (new Date()).getTime() - (timers.pause - timers.start);
 });
-nodes.buttons.cancel.addEventListener('click', async () => {
+nodes.buttons.cancel.addEventListener('click', () => {
     nodes.buttons.cancel.disabled = true;
-    await upload.cancel();
+    upload.cancel();
     nodes.buttons.cancel.disabled = false;
-    await modal.close();
 });
 
 /** Змінює вигляд деяких велечини в зручний для людини формат */

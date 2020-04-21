@@ -1,6 +1,6 @@
 <?php
 /**
- * Клас для роботи з файлом завантаження
+ * Збереження файлу на диск та видалення
  *
  * @author      Артем Висоцький <a.vysotsky@gmail.com>
  * @link        https://github.com/ArtemVysotsky/SafeUpload
@@ -11,9 +11,6 @@ class File {
 
     /** @var string Назва файлу */
     private $name;
-
-    /** @var string Назва тимчасового файлу */
-    private $nameTemporary;
 
     /** @var string Повна назва файлу з шляхом */
     private $source;
@@ -119,10 +116,9 @@ class File {
 
         $this->hash = $hash;
 
-        $this->nameTemporary = $this->name . '.' . $this->hash;
+        $name = $this->name . '.' . $this->hash;
 
-        $this->sourceTemporary =
-            $this->pathTemporary . DIRECTORY_SEPARATOR . $this->nameTemporary;
+        $this->sourceTemporary = $this->pathTemporary . DIRECTORY_SEPARATOR . $name;
 
         if ($check && !file_exists($this->sourceTemporary))
             throw new Exception(sprintf('Файл "%s" не знайдено', $this->sourceTemporary));

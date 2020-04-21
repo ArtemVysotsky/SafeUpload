@@ -6,22 +6,15 @@
  * @copyright   GNU General Public License v3
  */
 
-/** ToDo: перевірити роботу відновлення завантаження */
-/** ToDo: перевірити видалення файлу при помилці */
-/** ToDo: перевірити роботу помилок */
-/** ToDo: відрефакторити код */
-
-class SafeUpload {
+class Upload {
     /**
      * @property {object}   #settings                    - Налаштування класу
      * @property {string}   #settings.url                - Адреса API для завантаження файлу
-     * @property {object}   #settings.chunkSize          - Налаштування розміру фрагмента файлу
      * @property {number}   #settings.chunkSizeMinimum   - Мінімальний розмір фрагмента файлу, байти
      * @property {number}   #settings.chunkSizeMaximum   - Максимальний розмір фрагмента файлу, байти
      * @property {number}   #settings.fileSizeLimit      - Максимальний розмір файлу, байти
      * @property {number}   #settings.interval           - Рекомендована тривалість запиту, секунди
      * @property {number}   #settings.timeout            - Максимальна тривалість запиту, секунди
-     * @property {object}   #settings.retry              - Налаштування повторних запитів
      * @property {number}   #settings.retryLimit         - Максимальна кількість повторних запитів
      * @property {number}   #settings.retryDelay         - Тривалість паузи між повторними запитами, секунди
      */
@@ -40,7 +33,7 @@ class SafeUpload {
      * @property {object} #fileList                - Перелік FileList з файлами File та додатковими параметрами
      * @property {object} #fileList.files          - Перелік FileList
      * @property {number} #fileList.size           - Дані про розмір всіх файлів, байти
-     * @property {number} #fileList.size.uploaded  - Загальний розмір всіх файлів, байти
+     * @property {number} #fileList.size.uploaded  - Ррозмір завантажених частин файлів, байти
      * @property {number} #fileList.size.total     - Загальний розмір всіх файлів, байти
      * @property {number} #fileList.current        - Номер поточного файлу
      */
@@ -94,14 +87,14 @@ class SafeUpload {
      * @property {function} #callbacks.reject       - Дії при винекненні помилки під час процесу
      */
     #callbacks = {
-        pause: () => {}, iteration: () => {}, timeout: () => {}, resolve: () => {}, reject: () => {}
+        pause: () => {}, iteration: () => {}, timeout: () => {}, resolve: () => {}, reject: () => {}, finally: () => {}
     };
 
     /**
      * Конструктор
      * @param {object} files - Перелік FileList з файлами File
-     * @param {object} [callbacks] - Зворотні функції
      * @param {object} [settings] - Налаштування
+     * @param {object} [callbacks] - Зворотні функції
      */
     constructor(files, settings = {}, callbacks = {}) {
         this.#fileList.files = files;
@@ -118,35 +111,29 @@ class SafeUpload {
     /**
      * Починає процес завантаження файлу на сервер
      */
-    async start() {
-        return await this.#open();
-    }
+    start() {this.#open().then()}
 
     /**
      * Призупиняє процес завантаження файлу на сервер
      */
-    pause() {
-        this.#events.pause = true;
-    }
+    pause() {this.#events.pause = true}
 
     /**
      * Продовжує процес завантаження файлу на сервер
      */
-    async resume() {
-        let response = true;
+    resume() {
         this.#events.pause = null;
         switch (this.#request.action) {
-            case 'open': response = await this.#open(); break;
-            case 'append': response = await this.#append(); break;
-            case 'close': await this.#close(); break;
+            case 'open': this.#open().then(); break;
+            case 'append': this.#append().then(); break;
+            case 'close': this.#close().then(); break;
         }
-        return response;
     }
 
     /**
      * Скасовує процес завантаження файлу на сервер
      */
-    async cancel() {
+    cancel() {
         if (this.#events.pause) {
             this.#remove();
         } else {
@@ -166,7 +153,7 @@ class SafeUpload {
         const response = await this.#send();
         if (response === undefined) return false;
         this.#file.hash = response.hash;
-        this.#append();
+        await this.#append();
         return true;
     };
 
@@ -181,7 +168,7 @@ class SafeUpload {
             return true;
         }
         if (this.#events.stop) {
-            await this.#remove();
+            this.#remove();
             return true;
         }
         this.#request.action = 'append';
@@ -211,9 +198,9 @@ class SafeUpload {
         this.#request.speed = speed;
         this.#chunk.size.coefficient = 3 - this.#chunk.size.coefficient;
         if (this.#chunk.offset < this.#file.size) {
-            this.#append();
+            await this.#append();
         } else {
-            this.#close();
+            await this.#close();
         }
         return true;
     };
@@ -235,9 +222,10 @@ class SafeUpload {
         this.#fileList.current ++;
         if (this.#fileList.current < this.#fileList.files.length) {
             this.#file = this.#fileList.files[this.#fileList.current];
-            this.#open();
+            await this.#open();
         } else {
             this.#callbacks.resolve();
+            this.#callbacks.finally();
         }
     };
 
@@ -245,12 +233,12 @@ class SafeUpload {
      * Видаляє файл на сервері
      * @see this.#request
      */
-    #remove = async () => {
+    #remove = () => {
         this.#request.action = 'remove';
         this.#request.data = new FormData();
         this.#request.data.append('hash', this.#file.hash);
         this.#request.retry = false;
-        await this.#send();
+        this.#send();
     };
 
     /**
@@ -301,7 +289,7 @@ class SafeUpload {
             if (response) {
                 return response;
             } else {
-                console.error(`Перевищено час виконання запиту (${this.#settings.timeout})`);
+                console.warn(`Перевищено час виконання запиту (${this.#settings.timeout})`);
             }
         } catch (e) {
             console.error(`Під час виконання запиту виникла помилка (${e.message})`);
