@@ -8,7 +8,7 @@
 
 class Upload {
     /**
-     * @property {object}   #settings                    - Налаштування класу
+     * @property {object}   #settings                    - Налаштування по замовчуванню
      * @property {string}   #settings.url                - Адреса API для завантаження файлу
      * @property {number}   #settings.chunkSizeMinimum   - Мінімальний розмір частини файлу, байти
      * @property {number}   #settings.chunkSizeMaximum   - Максимальний розмір частини файлу, байти
@@ -79,15 +79,14 @@ class Upload {
     #events = {pause: false, stop: false};
 
     /**
-     * @property {object} #timers               - Збережені часові мітки
-     * @property {boolean} #timers.start        - Часова мітка початку завантаження
-     * @property {boolean} #timers.pause        - Часова мітка призупинення завантаження
-     * @property {boolean} #timers.iteration    - Часова мітка завантаження частини файлу
+     * @property {object} #timers           - Збережені часові мітки
+     * @property {number} #timers.start     - Часова мітка початку завантаження
+     * @property {number} #timers.pause     - Часова мітка призупинення завантаження
      */
-    #timers = {start: 0, pause: 0, iteration: 0};
+    #timers = {start: 0, pause: 0};
 
     /**
-     * @property {object} #callbacks                - Зворотні функції
+     * @property {object} #callbacks                - Функції зворотного виклику
      * @property {function} #callbacks.pause        - Дії при призупинені процесу завантаження файлу
      * @property {function} #callbacks.iteration    - Дії при виконанні кожного запита на сервер
      * @property {function} #callbacks.timeout      - Дії при відсутності відповіді від сервера
@@ -135,7 +134,7 @@ class Upload {
     resume() {
         this.#events.pause = null;
         this.#timers.start = (new Date()).getTime() - (this.#timers.pause - this.#timers.start);
-        switch (this.#request.action) {
+        switch (this.#request.data.get('action')) {
             case 'open': this.#open().then(); break;
             case 'append': this.#append().then(); break;
             case 'close': this.#close().then(); break;
@@ -161,13 +160,14 @@ class Upload {
     #open = async () => {
         if (this.#file.size > this.#settings.fileSizeLimit)
             this.#error('Розмір файлу більше дозволеного');
-        this.#request.action = 'open';
         this.#chunk.size.base = this.#settings.chunkSizeMinimum;
-        const response = await this.#send();
-        if (response === undefined) return false;
-        this.#file.hash = response.hash;
+        this.#request.data = new FormData();
+        this.#request.data.set('action', 'open');
+        this.#request.data.set('name', this.#file.name);
+        this.#file.hash = await this.#send();
+        if (this.#file.hash === undefined) return;
+        this.#request.data.set('hash', this.#file.hash);
         await this.#append();
-        return true;
     };
 
     /**
@@ -185,20 +185,17 @@ class Upload {
             this.#remove();
             return;
         }
-        this.#request.action = 'append';
         this.#chunk.number ++;
         this.#chunk.size.value =
             this.#chunk.size.base * this.#chunk.size.coefficient;
         this.#chunk.value =
             this.#file.slice(this.#chunk.offset, this.#chunk.offset + this.#chunk.size.value);
-        this.#request.data = new FormData();
-        this.#request.data.append('hash', this.#file.hash);
-        this.#request.data.append('offset', this.#chunk.offset);
-        this.#request.data.append('chunk', this.#chunk.value, this.#file.name);
-        const response = await this.#send();
-        if (response === undefined) return false;
+        this.#request.data.set('action', 'append');
+        this.#request.data.set('offset', this.#chunk.offset);
+        this.#request.data.set('chunk', this.#chunk.value, this.#file.name);
+        this.#chunk.offset = +await this.#send();
+        if (this.#chunk.offset === undefined) return;
         let speed = Math.round(this.#chunk.value.size / this.#request.time);
-        this.#chunk.offset = response.size;
         this.#fileList.size.uploaded += this.#chunk.value.size;
         if (this.#chunk.size.coefficient === 2) {
             if ((this.#request.time < this.#settings.interval) && (speed > this.#request.speed)) {
@@ -210,13 +207,13 @@ class Upload {
             }
         }
         this.#request.speed = speed;
+        this.#request.data.delete('chunk');
         this.#chunk.size.coefficient = 3 - this.#chunk.size.coefficient;
         if (this.#chunk.offset < this.#file.size) {
             await this.#append();
         } else {
             await this.#close();
         }
-        return true;
     };
 
     /**
@@ -224,13 +221,11 @@ class Upload {
      * @see this.#request
      */
     #close = async () => {
-        this.#request.action = 'close';
-        this.#request.data = new FormData();
-        this.#request.data.append('time', this.#file.lastModified);
-        this.#request.data.append('hash', this.#file.hash);
-        const response = await this.#send();
-        if (response === undefined) return;
-        if (response.size !== this.#file.size)
+        this.#request.data.set('action', 'close');
+        this.#request.data.set('time', this.#file.lastModified);
+        let size = +await this.#send();
+        if (size === undefined) return;
+        if (size !== this.#file.size)
             this.#error('Неправильний розмір завантаженого файлу');
         console.debug(`Файл ${this.#file.name} завантажено`);
         this.#fileList.current ++;
@@ -248,9 +243,7 @@ class Upload {
      * @see this.#request
      */
     #remove = () => {
-        this.#request.action = 'remove';
-        this.#request.data = new FormData();
-        this.#request.data.append('hash', this.#file.hash);
+        this.#request.data.set('action', 'remove');
         this.#request.retry = false;
         this.#send();
 
@@ -262,45 +255,35 @@ class Upload {
      * @see this.#request
      */
     #send = async () => {
-        let url = this.#settings.url + '?action=' + this.#request.action + '&name=' + this.#file.name;
+        let url = this.#settings.url;
         let body = {method: 'POST', body: this.#request.data};
         let retry = (this.#request.retry) ? 1 : 0;
         this.#request.time = (new Date()).getTime();
         let response = await this.#fetchExtended(url, body, retry);
         this.#request.time = ((new Date()).getTime() - this.#request.time) / 1000;
-        this.#request.data = null;
         if (!response) return;
         this.#callbacks.iteration(this.#getStatus());
-        let responseJSON;
-        try {
-            responseJSON = await response.json();
-        } catch (e) {
-            console.error(response);
-            this.#error('Неправильний формат відповіді сервера');
-        }
-        if (responseJSON.error) {
-            console.error(responseJSON.error);
-            this.#error('Внутрішня помилка сервера');
-        }
-        return responseJSON;
+        let responseText = await response.text();
+        if (response.status === 200) return responseText;
+        console.error(responseText);
+        this.#error('Внутрішня помилка сервера');
     };
 
     /**
      * Відправляє запит на сервер з таймаутом та повторними запитами при потребі
      * @param {string} url - Адреса запиту
      * @param {object} body - Дані запиту
-     * @param {number} retry [retry=1] - Номер повторного запиту, 0 - без повторів
+     * @param {number} [retry=1] - Номер повторного запиту, 0 - без повторів
      * @returns {Response|void} - Відповідь сервера при наявності
      * @throws {Error} - Неправильний формат відповіді сервера
      */
     #fetchExtended = async (url, body, retry = 1) => {
-        let response;
         try {
-            const fetchPromise = fetch(url, body);
-            const timeoutPromise = new Promise(resolve =>
+            let fetchPromise = fetch(url, body);
+            let timeoutPromise = new Promise(resolve =>
                 (setTimeout(resolve, this.#settings.timeout * 1000))
             );
-            response = await Promise.race([fetchPromise, timeoutPromise]);
+            let response = await Promise.race([fetchPromise, timeoutPromise]);
             if (response) {
                 return response;
             } else {

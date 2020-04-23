@@ -7,6 +7,8 @@
  * @copyright   GNU General Public License v3
  */
 
+error_reporting(0);
+
 set_error_handler('errorHandler');
 
 register_shutdown_function('shutdownHandler');
@@ -27,23 +29,22 @@ try {
 
     $file->setIsOverwrite(true);
 
-    $file->setName($_GET['name']);
+    $file->setName($_POST['name']);
 
-    switch($_GET['action']) {
+    switch($_POST['action']) {
 
-        case 'open': $response['hash'] = $file->open(); break;
+        case 'open': $response = $file->open(); break;
 
-        case 'append': $response['size'] = $file->append($_POST['hash'], $_FILES['chunk'], $_POST['offset']); break;
+        case 'append': $response = $file->append($_POST['hash'], $_FILES['chunk'], $_POST['offset']); break;
 
-        case 'close': $response['size'] = $file->close($_POST['hash'], $_POST['time'] ?? null); break;
+        case 'close': $response = $file->close($_POST['hash'], $_POST['time'] ?? null); break;
 
         case 'remove': $file->remove($_POST['hash']); break;
 
         default: throw new Exception('Невідома дія');
     }
 
-    echo json_encode($response, JSON_UNESCAPED_UNICODE);
-
+    echo $response;
 
 } catch (Exception $exception) {
 
@@ -93,11 +94,9 @@ function error($message, $file, $line, $type) {
 
     $error = sprintf('%s (%s:%d, %d)', $message, $file, $line, $type);
 
-    echo json_encode(['error' => $error], JSON_UNESCAPED_UNICODE);
-
     $log = sprintf("%s  %s\r\n", date('Y-m-d H:i:s'), $error);
 
     file_put_contents(__DIR__ . '/log', $log, FILE_APPEND);
 
-    exit();
+    exit($error);
 }
