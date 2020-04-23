@@ -10,8 +10,8 @@ class Upload {
     /**
      * @property {object}   #settings                    - Налаштування класу
      * @property {string}   #settings.url                - Адреса API для завантаження файлу
-     * @property {number}   #settings.chunkSizeMinimum   - Мінімальний розмір фрагмента файлу, байти
-     * @property {number}   #settings.chunkSizeMaximum   - Максимальний розмір фрагмента файлу, байти
+     * @property {number}   #settings.chunkSizeMinimum   - Мінімальний розмір частини файлу, байти
+     * @property {number}   #settings.chunkSizeMaximum   - Максимальний розмір частини файлу, байти
      * @property {number}   #settings.fileSizeLimit      - Максимальний розмір файлу, байти
      * @property {number}   #settings.interval           - Рекомендована тривалість запиту, секунди
      * @property {number}   #settings.timeout            - Максимальна тривалість запиту, секунди
@@ -50,14 +50,14 @@ class Upload {
     #file = {name: '', type: '', size: 0, hash: '', lastModified: 0};
 
     /**
-     * @property {number}   #chunk.number           - Порядковий номер фрагмента файлу
+     * @property {number}   #chunk.number           - Порядковий номер частини файлу
      * @property {number}   #chunk.offset           - Зміщення від початку файлу, байти
-     * @property {number}   #chunk.size.base        - Розмір бази фрагмента файлу, байти
-     * @property {number}   #chunk.size.value       - Плановий розмір фрагмента файлу, байти
-     * @property {number}   #chunk.size.coefficient - Коефіцієнт розміру фрагмента файлу (1|2)
-     * @property {File}     #chunk.value            - Вміст фрагмента файлу (File)
-     * @property {number}   #chunk.size             - Фактичний розмір фрагмента файлу, байти
-     * @property {string}   #chunk.type             - Тип фрагмента файлуґ
+     * @property {number}   #chunk.size.base        - Розмір бази частини файлу, байти
+     * @property {number}   #chunk.size.value       - Плановий розмір частини файлу, байти
+     * @property {number}   #chunk.size.coefficient - Коефіцієнт розміру частини файлу (1|2)
+     * @property {File}     #chunk.value            - Вміст частини файлу (File)
+     * @property {number}   #chunk.size             - Фактичний розмір частини файлу, байти
+     * @property {string}   #chunk.type             - Тип частини файлуґ
      */
     #chunk = {number: 0, offset: 0, size: {base: 0, value: 0, coefficient: 1}, value: {size: 0, type: ''}};
 
@@ -77,6 +77,14 @@ class Upload {
      * @property {boolean} #events.stop     - Ознака зупинки завантаження
      */
     #events = {pause: false, stop: false};
+
+    /**
+     * @property {object} #timers               - Збережені часові мітки
+     * @property {boolean} #timers.start        - Часова мітка початку завантаження
+     * @property {boolean} #timers.pause        - Часова мітка призупинення завантаження
+     * @property {boolean} #timers.iteration    - Часова мітка завантаження частини файлу
+     */
+    #timers = {start: 0, pause: 0, iteration: 0};
 
     /**
      * @property {object} #callbacks                - Зворотні функції
@@ -111,7 +119,10 @@ class Upload {
     /**
      * Починає процес завантаження файлу на сервер
      */
-    start() {this.#open().then()}
+    start() {
+        this.#timers.start = (new Date()).getTime();
+        this.#open().then();
+    }
 
     /**
      * Призупиняє процес завантаження файлу на сервер
@@ -123,6 +134,7 @@ class Upload {
      */
     resume() {
         this.#events.pause = null;
+        this.#timers.start = (new Date()).getTime() - (this.#timers.pause - this.#timers.start);
         switch (this.#request.action) {
             case 'open': this.#open().then(); break;
             case 'append': this.#append().then(); break;
@@ -139,6 +151,7 @@ class Upload {
         } else {
             this.#events.stop = true;
         }
+        this.#callbacks.finally();
     }
 
     /**
@@ -158,18 +171,19 @@ class Upload {
     };
 
     /**
-     * Додає фрагмент файлу на сервер
+     * Додає частину файлу на сервер
      * @see this.#request
      */
     #append = async () => {
         if (this.#events.pause) {
             this.#callbacks.pause();
+            this.#timers.pause = (new Date()).getTime();
             this.#request.speed = 0;
-            return true;
+            return;
         }
         if (this.#events.stop) {
             this.#remove();
-            return true;
+            return;
         }
         this.#request.action = 'append';
         this.#chunk.number ++;
@@ -239,6 +253,7 @@ class Upload {
         this.#request.data.append('hash', this.#file.hash);
         this.#request.retry = false;
         this.#send();
+
     };
 
     /**
@@ -312,9 +327,10 @@ class Upload {
     /**
      * Вираховує та повертає дані про статус процесу завантаження файлу
      * @returns     {object}
-     * @property    {number} chunk.number           - Номер фрагмента файлу
-     * @property    {number} chunk.size             - Розмір фрагмента файлу
-     * @property    {number} chunk.speed            - Швидкість завантаження фрагмента файлу, байти/секунду
+     * @property    {number} chunk.number           - Номер частини файлу
+     * @property    {number} chunk.size             - Розмір частини файлу
+     * @property    {number} chunk.time             - Час завантаження частини файлу
+     * @property    {number} chunk.speed            - Швидкість завантаження частини файлу, байти/секунду
      * @property    {number} current.number         - Номер поточного файлу
      * @property    {number} current.name           - Назва поточного файлу
      * @property    {number} current.size.uploaded  - Розмір завантаженої частини поточного файлу, байти
@@ -322,28 +338,40 @@ class Upload {
      * @property    {number} total.numbers          - Загальна кількість файлів
      * @property    {number} total.size.uploaded    - Розмір завантаженої частини всіх файлів, байти
      * @property    {number} total.size.total       - Загальний розмір всіх файлів, байти
+     * @property    {number} total.time.elapsed     - Час з початку завантаження файлів, мілісекунди
+     * @property    {number} total.time.estimate    - Прогнозований час до завершення завантаження файлів, мілісекунди
      */
     #getStatus = () => {
-        return {
-            chunk: {
-                number: this.#chunk.number,
-                size: this.#chunk.value.size,
-                time: this.#request.time,
-                speed: this.#request.speed
-            },
-            current: {
-                number:  this.#fileList.current + 1,
-                name: this.#file.name,
-                size: {
-                    uploaded: this.#chunk.offset,
-                    total: this.#file.size
-                }
-            },
-            total: {
-                number: this.#fileList.files.length,
-                size: this.#fileList.size
+        let status = {};
+        status.chunk = {
+            number: this.#chunk.number,
+            size: this.#chunk.value.size,
+            time: this.#request.time,
+            speed: this.#request.speed
+        };
+        status.current = {
+            number:  this.#fileList.current + 1,
+            name: this.#file.name,
+            size: {
+                uploaded: this.#chunk.offset,
+                total: this.#file.size
             }
-        }
+        };
+        status.total = {
+            number: this.#fileList.files.length,
+            size: {
+                uploaded: this.#fileList.size.uploaded,
+                total: this.#fileList.size.total,
+            },
+            time: {}
+        };
+        status.total.time.elapsed =
+            Math.round((new Date()).getTime() - this.#timers.start);
+        status.total.time.estimate =
+            status.total.size.total / (status.total.size.uploaded / status.total.time.elapsed);
+        status.total.time.estimate =
+            Math.round(status.total.time.estimate - status.total.time.elapsed);
+        return status;
     };
 
     /**

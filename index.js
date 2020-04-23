@@ -6,8 +6,7 @@
  * @copyright   GNU General Public License v3
  */
 
-let nodes = {}, callbacks = {}, upload, timers = {start: 0, pause: 0, iteration: 0};
-
+/* Налаштування завантаження */
 const settings = {
     url: 'api.php', // Адреса API для збереження файлу на диск
     chunkSizeMaximum: 16 * 1024 ** 2, // Максимальний розмір фрагмента файлу, байти
@@ -19,7 +18,7 @@ const settings = {
 };
 
 /* Збережені посилання на елементи сторінки */
-nodes = {};
+let nodes = {};
 nodes.main = document.querySelector('main');
 nodes.modal = {};
 nodes.modal.self = nodes.main.querySelector('.modal');
@@ -43,26 +42,15 @@ nodes.buttons.cancel = nodes.modal.buttons.querySelector('.cancel');
 nodes.buttons.close = nodes.modal.header.querySelector('.close span');
 
 /* Реакції на різні дії процесу завантаження файла */
+let callbacks = {};
 callbacks.pause = () => {
     nodes.buttons.pause.disabled = false;
     nodes.buttons.pause.style.display = 'none';
     nodes.buttons.resume.style.display = 'block';
-    timers.pause = (new Date()).getTime();
 };
 callbacks.iteration = (status) => {
-    timers.iteration = (new Date()).getTime();
     status.current.progress = Math.round(status.current.size.uploaded * 100 / status.current.size.total);
     status.total.progress = Math.round(status.total.size.uploaded * 100 / status.total.size.total);
-    status.total = {...status.total, time:{elapsed: 0, estimate: 0}};
-    if (status.chunk.speed > 0) {
-        status.total.time.elapsed = Math.round(timers.iteration - timers.start);
-        status.total.time.estimate =
-            status.total.size.total / (status.total.size.uploaded / status.total.time.elapsed);
-        status.total.time.estimate =
-            Math.round(status.total.time.estimate - status.total.time.elapsed);
-    } else {
-        status.total.time.estimate = 0;
-    }
     nodes.status.name.innerHTML = status.current.name;
     if (status.total.number > 1) {
         nodes.status.name.innerHTML =
@@ -97,18 +85,18 @@ callbacks.finally = async () => {
 };
 
 /* Реакції на різні дії користувача */
+let upload;
 nodes.buttons.file.addEventListener('change', async function() {
     if (!this.files.length) return;
     upload = new Upload(this.files, settings, callbacks);
     nodes.buttons.file.disabled = true;
     nodes.buttons.resume.style.display = 'none';
+    nodes.status.progress.current.parentElement.style.display = (this.files.length === 1) ? 'none' : 'flex';
     nodes.modal.self.style.transition = 'opacity .5s';
     nodes.modal.self.style.display = 'block';
-    nodes.status.progress.current.parentElement.style.display = (this.files.length === 1) ? 'none' : 'flex';
     await sleep(0);
     nodes.modal.self.classList.add('show');
     upload.start();
-    timers.start = timers.iteration = (new Date()).getTime();
 });
 nodes.buttons.pause.addEventListener('click', () => {
     nodes.buttons.pause.disabled = true;
@@ -118,7 +106,6 @@ nodes.buttons.resume.addEventListener('click', () => {
     upload.resume();
     nodes.buttons.pause.style.display = 'block';
     nodes.buttons.resume.style.display = 'none';
-    timers.start = (new Date()).getTime() - (timers.pause - timers.start);
 });
 nodes.buttons.cancel.addEventListener('click', () => {
     nodes.buttons.cancel.disabled = true;
@@ -136,7 +123,7 @@ class Human {
      */
     static getSize = (bytes, digits = 0) => {
         const thousand = 1024;
-        if(Math.abs(bytes) < thousand) return bytes + ' Б';
+        if (Math.abs(bytes) < thousand) return bytes + ' Б';
         let i = -1;
         const units = ['КБ','МБ','ГБ'];
         do {bytes /= thousand; ++i;} while(Math.abs(bytes) >= thousand && i < units.length - 1);
