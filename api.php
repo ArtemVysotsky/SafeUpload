@@ -8,28 +8,23 @@
  */
 
 error_reporting(0);
-
 set_error_handler('errorHandler');
-
 register_shutdown_function('shutdownHandler');
 
 try {
 
     $response = [];
 
+    $settings = [
+        'path'          => __DIR__ . '/uploads',
+        'pathTemporary' => __DIR__ . '/uploads/.tmp',
+        'size'          => 3 * 1024 * 1024 * 1024,
+        'isOverwrite'   => true
+    ];
+
     require_once('File.php');
 
-    $file = new File();
-
-    $file->setPath(__DIR__ . '/uploads');
-
-    $file->setPathTemporary(__DIR__  . '/uploads/.tmp');
-
-    $file->setSizeMaximum(3 * 1024 * 1024 * 1024);
-
-    $file->setIsOverwrite(true);
-
-    $file->setName($_POST['name']);
+    $file = new File($_POST['name'], $settings);
 
     switch($_POST['action']) {
 

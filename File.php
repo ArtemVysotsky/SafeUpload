@@ -10,28 +10,30 @@
 class File {
 
     /** @var string Назва файлу */
-    private $name;
+    protected $name;
 
     /** @var string Повна назва файлу з шляхом */
-    private $source;
+    protected $source;
 
     /** @var string Повна назва тимчасового файлу з шляхом */
-    private $sourceTemporary;
-
-    /** @var string Шлях до теки зберігання завантажених файлів */
-    protected $path = '';
-
-    /** @var string Шлях до теки тимчасового зберігання файлу під час завантження */
-    protected $pathTemporary = '';
+    protected $sourceTemporary;
 
     /** @var string Хеш файлу */
     protected $hash;
 
-    /** @var integer Максимальний розмір файлу */
-    protected $sizeMaximum = 0;
-
-    /** @var boolean Ознака дозволу перезапису файлів з однаковою назвою */
-    protected $isOverwrite = false;
+    /**
+     * @var array Налаштування
+     * @param string $path Шлях до теки зберігання завантажених файлів
+     * @param string $pathTemporary Шлях до теки тимчасового зберігання файлу під час завантження
+     * @param integer $size Максимальний розмір файлу
+     * @param boolean $isOverwrite Ознака дозволу перезапису файлів з однаковою назвою
+     */
+    protected $settings = array(
+        'path'          => '',
+        'pathTemporary' => '',
+        'size'          => 0,
+        'isOverwrite'   => false
+    );
 
     /** @var array Перелік кодів та опису помилок завантаження файлів */
     protected $errors = array(
@@ -49,49 +51,12 @@ class File {
     /**
      * Зберігає шлях до теки зберігання завантажених файлів
      *
-     * @param string $path Шлях до теки
-     */
-    public function setPath(string $path): void {
-
-        $this->path = $path;
-    }
-
-    /**
-     * Зберігає шлях до теки тимчасового зберігання файлу під час завантження
-     *
-     * @param string $path Шлях до теки
-     */
-    public function setPathTemporary(string $path): void {
-
-        $this->pathTemporary = $path;
-    }
-
-    /**
-     * Зберігає максимальний розмір файлу
-     *
-     * @param integer $size Розмір файлу
-     */
-    public function setSizeMaximum(int $size): void {
-
-        $this->sizeMaximum = $size;
-    }
-
-    /**
-     * Зберігає ознаку дозволу перезапису файлів з однаковою назвою
-     *
-     * @param boolean $value Ознака дозволу перезапису
-     */
-    public function setIsOverwrite(bool $value): void {
-
-        $this->isOverwrite = $value;
-    }
-
-    /**
-     * Зберігає назву файлу
-     *
      * @param string $name Назва файлу
+     * @param array $settings Налаштування
      */
-    public function setName(string $name): void {
+    public function __construct(string $name, array $settings = null) {
+
+        $this->settings = array_merge($this->settings, $settings);
 
         $this->name = $name;
 
@@ -103,7 +68,7 @@ class File {
      */
     protected function setSource(): void {
 
-        $this->source = $this->path . DIRECTORY_SEPARATOR . $this->name;
+        $this->source = $this->settings['path'] . DIRECTORY_SEPARATOR . $this->name;
     }
 
     /**
@@ -118,7 +83,7 @@ class File {
 
         $name = $this->name . '.' . $this->hash;
 
-        $this->sourceTemporary = $this->pathTemporary . DIRECTORY_SEPARATOR . $name;
+        $this->sourceTemporary = $this->settings['pathTemporary'] . DIRECTORY_SEPARATOR . $name;
 
         if ($check && !file_exists($this->sourceTemporary))
             throw new Exception(sprintf('Файл "%s" не знайдено', $this->sourceTemporary));
@@ -131,7 +96,7 @@ class File {
     */
     public function open(): string {
 
-        if (!$this->isOverwrite && file_exists($this->source))
+        if (!$this->settings['isOverwrite'] && file_exists($this->source))
             throw new Exception('Файл з такою назвою вже існує');
 
         $this->setHash(bin2hex(random_bytes(16)), false);
@@ -161,7 +126,7 @@ class File {
 
         $size = filesize($this->sourceTemporary);
 
-        if (($size + $file['size']) > $this->sizeMaximum)
+        if (($size + $file['size']) > $this->settings['size'])
             throw new Exception('Розмір файлу перевищує допустимий');
 
         if ($size != $offset) return $size;
@@ -184,7 +149,7 @@ class File {
 
         $this->setHash($hash);
 
-        if (!$this->isOverwrite && file_exists($this->source))
+        if (!$this->settings['isOverwrite'] && file_exists($this->source))
             throw new Exception('Файл з такою назвою вже існує');
 
         rename($this->sourceTemporary, $this->source);

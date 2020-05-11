@@ -107,9 +107,7 @@ class Upload {
         this.#fileList.files = files;
         for(let i = 0; i < this.#fileList.files.length; i ++)
             this.#fileList.size.total += this.#fileList.files[i].size;
-        console.debug({files: this.#fileList});
         this.#settings = {...this.#settings, ...settings};
-        console.debug({settings: this.#settings});
         this.#callbacks = {...this.#callbacks, ...callbacks};
         this.#file = this.#fileList.files[0];
         this.#callbacks.iteration(this.#getStatus());
