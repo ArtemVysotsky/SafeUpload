@@ -18,7 +18,7 @@ try {
     $settings = [
         'path'          => __DIR__ . '/uploads',
         'pathTemporary' => __DIR__ . '/uploads/.tmp',
-        'size'          => 3 * 1024 * 1024 * 1024,
+        'size'          => 3 * 1024 ** 3,
         'isOverwrite'   => true
     ];
 
@@ -93,5 +93,5 @@ function error($message, $file, $line, $type) {
 
     file_put_contents(__DIR__ . '/log', $log, FILE_APPEND);
 
-    exit($error);
+    exit($message);
 }

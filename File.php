@@ -86,7 +86,7 @@ class File {
         $this->sourceTemporary = $this->settings['pathTemporary'] . DIRECTORY_SEPARATOR . $name;
 
         if ($check && !file_exists($this->sourceTemporary))
-            throw new Exception(sprintf('Файл "%s" не знайдено', $this->sourceTemporary));
+            throw new Exception('Тимчасовий файл не знайдено');
     }
 
     /**
@@ -119,7 +119,7 @@ class File {
         $this->setHash($hash);
 
         if ($file['error'] !== 0)
-            throw new Exception('Помилка завантаження: ' . $this->errors[$file['error']]);
+            throw new Exception(sprintf('Помилка завантаження (%s)', $this->errors[$file['error']]));
 
         if (!is_uploaded_file($file['tmp_name']))
             throw new Exception('Неправильно завантажений файл');

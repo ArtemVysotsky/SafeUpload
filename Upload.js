@@ -263,8 +263,7 @@ class Upload {
         this.#callbacks.iteration(this.#getStatus());
         let responseText = await response.text();
         if (response.status === 200) return responseText;
-        console.error(responseText);
-        this.#error('Внутрішня помилка сервера');
+        this.#error(responseText);
     };
 
     /**
@@ -273,22 +272,17 @@ class Upload {
      * @param {object} body - Дані запиту
      * @param {number} [retry=1] - Номер повторного запиту, 0 - без повторів
      * @returns {Response|void} - Відповідь сервера при наявності
-     * @throws {Error} - Неправильний формат відповіді сервера
      */
     #fetchExtended = async (url, body, retry = 1) => {
-        try {
-            let fetchPromise = fetch(url, body);
-            let timeoutPromise = new Promise(resolve =>
-                (setTimeout(resolve, this.#settings.timeout * 1000))
-            );
-            let response = await Promise.race([fetchPromise, timeoutPromise]);
-            if (response) {
-                return response;
-            } else {
-                console.warn(`Перевищено час виконання запиту (${this.#settings.timeout})`);
-            }
-        } catch (e) {
-            console.error(`Під час виконання запиту виникла помилка (${e.message})`);
+        let fetchPromise = await fetch(url, body);
+        let timeoutPromise = new Promise(resolve =>
+            (setTimeout(resolve, this.#settings.timeout * 1000))
+        );
+        let response = await Promise.race([fetchPromise, timeoutPromise]);
+        if (response) {
+            return response;
+        } else {
+            console.warn(`Перевищено час виконання запиту (${this.#settings.timeout})`);
         }
         if (!retry) return;
         if (this.#events.stop) return;
