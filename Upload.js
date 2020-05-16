@@ -27,7 +27,7 @@ class Upload {
         timeout: 5,
         retryLimit: 5,
         retryDelay: 1
-    };
+    }
 
     /**
      * @property {object} #fileList                - Перелік FileList з файлами File та додатковими параметрами
@@ -37,7 +37,7 @@ class Upload {
      * @property {number} #fileList.size.total     - Загальний розмір всіх файлів, байти
      * @property {number} #fileList.current        - Номер поточного файлу
      */
-    #fileList = {files: {}, size: {uploaded: 0, total: 0}, current: 0};
+    #fileList = {files: {}, size: {uploaded: 0, total: 0}, current: 0}
 
     /**
      * @property {object} #file                 - Файл File зі вмістимим та додатковими параметрами
@@ -47,7 +47,7 @@ class Upload {
      * @property {string} #file.hash            - Хеш файлу
      * @property {number} #file.lastModified    - Дата останньої зміни файлу, мілісекунди
      */
-    #file = {name: '', type: '', size: 0, hash: '', lastModified: 0};
+    #file = {name: '', type: '', size: 0, hash: '', lastModified: 0}
 
     /**
      * @property {number}   #chunk.number           - Порядковий номер частини файлу
@@ -59,7 +59,7 @@ class Upload {
      * @property {number}   #chunk.size             - Фактичний розмір частини файлу, байти
      * @property {string}   #chunk.type             - Тип частини файлуґ
      */
-    #chunk = {number: 0, offset: 0, size: {base: 0, value: 0, coefficient: 1}, value: {size: 0, type: ''}};
+    #chunk = {number: 0, offset: 0, size: {base: 0, value: 0, coefficient: 1}, value: {size: 0, type: ''}}
 
     /**
      * @property {object}   #request        - Запит до сервера
@@ -69,21 +69,21 @@ class Upload {
      * @property {number}   #request.speed  - Швидкість виконання запиту, Б/с
      * @property {boolean}  #request.retry  - Ознака виконання повторних запитів
      */
-    #request = {action: '', data: {}, time: 0, speed: 0, retry: true};
+    #request = {action: '', data: {}, time: 0, speed: 0, retry: true}
 
     /**
      * @property {object} #events           - Ознаки деяких дій
      * @property {boolean} #events.pause    - Ознака призупинки завантаження
      * @property {boolean} #events.stop     - Ознака зупинки завантаження
      */
-    #events = {pause: false, stop: false};
+    #events = {pause: false, stop: false}
 
     /**
      * @property {object} #timers           - Збережені часові мітки
      * @property {number} #timers.start     - Часова мітка початку завантаження
      * @property {number} #timers.pause     - Часова мітка призупинення завантаження
      */
-    #timers = {start: 0, pause: 0};
+    #timers = {start: 0, pause: 0}
 
     /**
      * @property {object} #callbacks                - Функції зворотного виклику
@@ -95,7 +95,7 @@ class Upload {
      */
     #callbacks = {
         pause: () => {}, iteration: () => {}, timeout: () => {}, resolve: () => {}, reject: () => {}, finally: () => {}
-    };
+    }
 
     /**
      * Конструктор
@@ -157,7 +157,7 @@ class Upload {
      */
     #open = async () => {
         if (this.#file.size > this.#settings.fileSizeLimit)
-            this.#error('Розмір файлу більше дозволеного');
+            return this.#error('Розмір файлу більше дозволеного');
         this.#chunk.size.base = this.#settings.chunkSizeMinimum;
         this.#request.data = new FormData();
         this.#request.data.set('action', 'open');
@@ -166,7 +166,7 @@ class Upload {
         if (this.#file.hash === undefined) return;
         this.#request.data.set('hash', this.#file.hash);
         await this.#append();
-    };
+    }
 
     /**
      * Додає частину файлу на сервер
@@ -191,7 +191,7 @@ class Upload {
         this.#request.data.set('action', 'append');
         this.#request.data.set('offset', this.#chunk.offset);
         this.#request.data.set('chunk', this.#chunk.value, this.#file.name);
-        this.#chunk.offset = +await this.#send();
+        this.#chunk.offset = await this.#send();
         if (this.#chunk.offset === undefined) return;
         let speed = Math.round(this.#chunk.value.size / this.#request.time);
         this.#fileList.size.uploaded += this.#chunk.value.size;
@@ -212,7 +212,7 @@ class Upload {
         } else {
             await this.#close();
         }
-    };
+    }
 
     /**
      * Закриває файл на сервері
@@ -221,10 +221,10 @@ class Upload {
     #close = async () => {
         this.#request.data.set('action', 'close');
         this.#request.data.set('time', this.#file.lastModified);
-        let size = +await this.#send();
+        let size = await this.#send();
         if (size === undefined) return;
         if (size !== this.#file.size)
-            this.#error('Неправильний розмір завантаженого файлу');
+            return this.#error('Неправильний розмір завантаженого файлу');
         console.debug(`Файл ${this.#file.name} завантажено`);
         this.#fileList.current ++;
         if (this.#fileList.current < this.#fileList.files.length) {
@@ -234,7 +234,7 @@ class Upload {
             this.#callbacks.resolve();
             this.#callbacks.finally();
         }
-    };
+    }
 
     /**
      * Видаляє файл на сервері
@@ -245,7 +245,7 @@ class Upload {
         this.#request.retry = false;
         this.#send();
 
-    };
+    }
 
     /**
      * Готує запит до сервера та витягує дані з відповіді
@@ -259,12 +259,13 @@ class Upload {
         this.#request.time = (new Date()).getTime();
         let response = await this.#fetchExtended(url, body, retry);
         this.#request.time = ((new Date()).getTime() - this.#request.time) / 1000;
-        if (!response) return;
         this.#callbacks.iteration(this.#getStatus());
+        if (response === undefined) return;
         let responseText = await response.text();
-        if (response.status === 200) return responseText;
-        this.#error(responseText);
-    };
+        if (response.status === 200)
+            return /^\d+$/.test(responseText) ? +responseText : responseText;
+        return this.#error(responseText);
+    }
 
     /**
      * Відправляє запит на сервер з таймаутом та повторними запитами при потребі
@@ -274,18 +275,14 @@ class Upload {
      * @returns {Response|void} - Відповідь сервера при наявності
      */
     #fetchExtended = async (url, body, retry = 1) => {
-        let fetchPromise = await fetch(url, body);
+        let fetchPromise = fetch(url, body);
         let timeoutPromise = new Promise(resolve =>
             (setTimeout(resolve, this.#settings.timeout * 1000))
         );
         let response = await Promise.race([fetchPromise, timeoutPromise]);
-        if (response) {
-            return response;
-        } else {
-            console.warn(`Перевищено час виконання запиту (${this.#settings.timeout})`);
-        }
-        if (!retry) return;
-        if (this.#events.stop) return;
+        if (response) return response;
+        console.warn(`Перевищено час виконання запиту (${this.#settings.timeout})`);
+        if ((retry === 0) || this.#events.stop) return;
         if (retry <= this.#settings.retryLimit) {
             console.warn('Повторний запит #' + retry);
             await new Promise(resolve => {
@@ -297,7 +294,7 @@ class Upload {
             this.#callbacks.pause();
             this.#callbacks.timeout();
         }
-    };
+    }
 
     /**
      * Вираховує та повертає дані про статус процесу завантаження файлу
@@ -347,7 +344,7 @@ class Upload {
         status.total.time.estimate =
             Math.round(status.total.time.estimate - status.total.time.elapsed);
         return status;
-    };
+    }
 
     /**
      * Викидає помилку
@@ -356,6 +353,6 @@ class Upload {
     #error = (message) => {
         this.#callbacks.reject(message);
         this.#callbacks.finally();
-        throw new Error(message);
-    };
+        console.error(message);
+    }
 }

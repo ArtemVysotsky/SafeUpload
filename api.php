@@ -43,15 +43,14 @@ try {
 
 } catch (Exception $exception) {
 
-    if (isset($file) && is_object($file) && isset($_POST['hash']))
+    error($exception->getMessage(), $exception->getFile(), $exception->getLine(), $exception->getCode(), true);
 
-        $file->remove($_POST['hash']);
+} catch (Error $error) {
 
-    error($exception->getMessage(), $exception->getFile(), $exception->getLine(), $exception->getCode());
+    error($error->getMessage(), $error->getFile(), $error->getLine(), $error->getCode());
 }
-
 /**
- * Перетворює помилки у винятки
+ * Перехоплення помилок
  *
  * @param integer $number Номер помилки
  * @param string $string Опис помилки
@@ -64,7 +63,7 @@ function errorHandler(int $number, string $string, string $file, int $line) {
 }
 
 /**
- * Вивід критичних помилок
+ * Перехоплення критичних помилок
  */
 function shutdownHandler() {
 
@@ -82,8 +81,9 @@ function shutdownHandler() {
  * @param string $file Назва файлу, в якому виникла помилка
  * @param integer $line Номер рядка файлу, в якому виникла помилка
  * @param integer $type Тип помилки
+ * @param boolean $isViewMessage Ознака виводу повідомлення
  */
-function error($message, $file, $line, $type) {
+function error($message, $file, $line, $type, $isViewMessage = false) {
 
     header('HTTP/1.x 500 Internal Server Error');
 
@@ -93,5 +93,5 @@ function error($message, $file, $line, $type) {
 
     file_put_contents(__DIR__ . '/log', $log, FILE_APPEND);
 
-    exit($message);
+    exit($isViewMessage ? $message : 'Внутрішня помилка сервера');
 }
