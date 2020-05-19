@@ -124,7 +124,11 @@ class Upload {
     /**
      * Призупиняє процес завантаження файлу на сервер
      */
-    pause() {this.#events.pause = true}
+    pause() {
+        this.#request.speed = 0;
+        this.#events.pause = true;
+        this.#timers.pause = (new Date()).getTime();
+    }
 
     /**
      * Продовжує процес завантаження файлу на сервер
@@ -175,8 +179,6 @@ class Upload {
     #append = async () => {
         if (this.#events.pause) {
             this.#callbacks.pause();
-            this.#timers.pause = (new Date()).getTime();
-            this.#request.speed = 0;
             return;
         }
         if (this.#events.stop) {
@@ -320,7 +322,7 @@ class Upload {
             size: this.#chunk.value.size,
             time: this.#request.time,
             speed: this.#request.speed
-        };
+        }
         status.current = {
             number:  this.#fileList.current + 1,
             name: this.#file.name,
@@ -328,21 +330,22 @@ class Upload {
                 uploaded: this.#chunk.offset,
                 total: this.#file.size
             }
-        };
+        }
         status.total = {
             number: this.#fileList.files.length,
             size: {
                 uploaded: this.#fileList.size.uploaded,
                 total: this.#fileList.size.total,
             },
-            time: {}
-        };
-        status.total.time.elapsed =
-            Math.round((new Date()).getTime() - this.#timers.start);
-        status.total.time.estimate =
-            status.total.size.total / (status.total.size.uploaded / status.total.time.elapsed);
-        status.total.time.estimate =
-            Math.round(status.total.time.estimate - status.total.time.elapsed);
+            time: {elapsed: 0, estimate: 0}
+        }
+        if (this.#timers.start > 0)
+            status.total.time.elapsed = Math.round((new Date()).getTime() - this.#timers.start);
+        if (status.total.size.uploaded > 0) {
+            status.total.time.estimate =
+                Math.round(status.total.size.total / (status.total.size.uploaded / status.total.time.elapsed))
+            status.total.time.estimate -= status.total.time.elapsed;
+        }
         return status;
     }
 
