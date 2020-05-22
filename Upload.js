@@ -193,8 +193,9 @@ class Upload {
         this.#request.data.set('action', 'append');
         this.#request.data.set('offset', this.#chunk.offset);
         this.#request.data.set('chunk', this.#chunk.value, this.#file.name);
-        this.#chunk.offset = await this.#send();
-        if (this.#chunk.offset === undefined) return;
+        let response = await this.#send();
+        if (response === undefined) return;
+        this.#chunk.offset = response;
         let speed = Math.round(this.#chunk.value.size / this.#request.time);
         this.#fileList.size.uploaded += this.#chunk.value.size;
         if (this.#chunk.size.coefficient === 2) {
@@ -261,8 +262,8 @@ class Upload {
         this.#request.time = (new Date()).getTime();
         let response = await this.#fetchExtended(url, body, retry);
         this.#request.time = ((new Date()).getTime() - this.#request.time) / 1000;
-        this.#callbacks.iteration(this.#getStatus());
         if (response === undefined) return;
+        this.#callbacks.iteration(this.#getStatus());
         let responseText = await response.text();
         if (response.status === 200)
             return /^\d+$/.test(responseText) ? +responseText : responseText;
@@ -277,13 +278,17 @@ class Upload {
      * @returns {Response|void} - Відповідь сервера при наявності
      */
     #fetchExtended = async (url, body, retry = 1) => {
-        let fetchPromise = fetch(url, body);
-        let timeoutPromise = new Promise(resolve =>
-            (setTimeout(resolve, this.#settings.timeout * 1000))
-        );
-        let response = await Promise.race([fetchPromise, timeoutPromise]);
-        if (response) return response;
-        console.warn(`Перевищено час виконання запиту (${this.#settings.timeout})`);
+        try {
+            let fetchPromise = fetch(url, body);
+            let timeoutPromise = new Promise(resolve =>
+                (setTimeout(resolve, this.#settings.timeout * 1000))
+            );
+            let response = await Promise.race([fetchPromise, timeoutPromise]);
+            if (response) return response;
+            console.warn(`Перевищено час виконання запиту (${this.#settings.timeout}c)`);
+        } catch (e) {
+            console.warn('Під час виконання запиту виникла помилка: ' + e.message);
+        }
         if ((retry === 0) || this.#events.stop) return;
         if (retry <= this.#settings.retryLimit) {
             console.warn('Повторний запит #' + retry);

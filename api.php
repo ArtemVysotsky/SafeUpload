@@ -13,7 +13,7 @@ register_shutdown_function('shutdownHandler');
 
 try {
 
-    $response = [];
+    $response = '';
 
     $settings = [
         'path'          => __DIR__ . '/uploads',
