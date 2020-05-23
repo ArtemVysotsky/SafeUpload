@@ -43,7 +43,13 @@ try {
 
 } catch (Exception $exception) {
 
-    error($exception->getMessage(), $exception->getFile(), $exception->getLine(), $exception->getCode(), true);
+    error(
+        $exception->getMessage(),
+        $exception->getFile(),
+        $exception->getLine(),
+        $exception->getCode(),
+        $exception->getTraceAsString()
+    );
 
 } catch (Error $error) {
 
@@ -81,17 +87,19 @@ function shutdownHandler() {
  * @param string $file Назва файлу, в якому виникла помилка
  * @param integer $line Номер рядка файлу, в якому виникла помилка
  * @param integer $type Тип помилки
- * @param boolean $isViewMessage Ознака виводу повідомлення
+ * @param string $trace Трасування
  */
-function error($message, $file, $line, $type, $isViewMessage = false) {
+function error($message, $file, $line, $type, $trace = null) {
 
     header('HTTP/1.x 500 Internal Server Error');
 
-    $error = sprintf('%s (%s:%d, %d)', $message, $file, $line, $type);
+    $error = sprintf('%s  %s (%s:%d, %d)', date('Y-m-d H:i:s'), $message, $file, $line, $type);
 
-    $log = sprintf("%s  %s\r\n", date('Y-m-d H:i:s'), $error);
+    if (isset($trace))
 
-    file_put_contents(__DIR__ . '/log', $log, FILE_APPEND);
+        $error = sprintf("%s\r\n%s\r\n", $error, $trace);
 
-    exit($isViewMessage ? $message : 'Внутрішня помилка сервера');
+    file_put_contents(__DIR__ . '/log', $error, FILE_APPEND);
+
+    exit($trace ? $message : 'Внутрішня помилка сервера');
 }

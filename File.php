@@ -75,7 +75,7 @@ class File {
      * Зберігає хеш файлу
      *
      * @param string $hash Хеш файлу
-     * @param boolean $check Ознака перевіки файл на наявність
+     * @param boolean $check Ознака перевіки файла на наявність
      */
     protected function setHash(string $hash, bool $check = true): void {
 

@@ -67,10 +67,11 @@ callbacks.iteration = (status) => {
     nodes.status.time.innerHTML =
         Human.getInterval(status.total.time.elapsed) + ' / ' + Human.getInterval(status.total.time.estimate);
     console.debug(
-        '#' + status.chunk.number.toString(),
-        Human.getNumber((status.chunk.size / 1024).toFixed()).padStart(8) + ' КБ',
-        Human.getNumber((status.chunk.speed / 1024).toFixed()).padStart(8) + ' КБ/с',
-        Human.getNumber(status.chunk.time.toFixed(3)).padStart(8) + ' c'
+        Human.getNumber(status.current.size.uploaded).padStart(Human.getNumber(status.current.size.total).length) + ' Б',
+        Human.getNumber((status.chunk.size / 1024).toFixed()).padStart(Human.getNumber(settings.fileSizeLimit).length - 5) + ' КБ',
+        Human.getNumber((status.chunk.speed / 1024 ** 2).toFixed(2)).padStart(7) + ' МБ/с',
+        Human.getNumber(status.chunk.time.toFixed(2)).padStart(Human.getNumber(settings.interval).length + 5) + ' c',
+        '  #' + status.chunk.number.toString()
     );
 };
 callbacks.timeout = () => {alert('Сервер не відповідає, спробуйте пізніше')};
@@ -89,6 +90,7 @@ let upload;
 nodes.buttons.file.addEventListener('change', async function() {
     if (!this.files.length) return;
     upload = new Upload(this.files, settings, callbacks);
+    upload.start();
     nodes.buttons.file.disabled = true;
     nodes.buttons.resume.style.display = 'none';
     nodes.status.progress.current.parentElement.style.display = (this.files.length === 1) ? 'none' : 'flex';
@@ -96,7 +98,6 @@ nodes.buttons.file.addEventListener('change', async function() {
     nodes.modal.self.style.display = 'block';
     await sleep(0);
     nodes.modal.self.classList.add('show');
-    upload.start();
 });
 nodes.buttons.pause.addEventListener('click', () => {
     nodes.buttons.pause.disabled = true;

@@ -32,7 +32,7 @@ class Upload {
     /**
      * @property {object} #fileList                - Перелік FileList з файлами File та додатковими параметрами
      * @property {object} #fileList.files          - Перелік FileList
-     * @property {number} #fileList.size           - Дані про розмір всіх файлів, байти
+     * @property {object} #fileList.size           - Дані про розмір всіх файлів
      * @property {number} #fileList.size.uploaded  - Ррозмір завантажених частин файлів, байти
      * @property {number} #fileList.size.total     - Загальний розмір всіх файлів, байти
      * @property {number} #fileList.current        - Номер поточного файлу
@@ -50,14 +50,16 @@ class Upload {
     #file = {name: '', type: '', size: 0, hash: '', lastModified: 0}
 
     /**
+     * @property {object}   #chunk                  - Параметри частини файлу
      * @property {number}   #chunk.number           - Порядковий номер частини файлу
      * @property {number}   #chunk.offset           - Зміщення від початку файлу, байти
+     * @property {object}   #chunk.size             - Дані розміру частини файлу, байти
      * @property {number}   #chunk.size.base        - Розмір бази частини файлу, байти
-     * @property {number}   #chunk.size.value       - Плановий розмір частини файлу, байти
+     * @property {number}   #chunk.size.value       - Запланований розмір частини файлу, байти
      * @property {number}   #chunk.size.coefficient - Коефіцієнт розміру частини файлу (1|2)
-     * @property {File}     #chunk.value            - Вміст частини файлу (File)
-     * @property {number}   #chunk.size             - Фактичний розмір частини файлу, байти
-     * @property {string}   #chunk.type             - Тип частини файлуґ
+     * @property {object}   #chunk.value            - Вміст частини файлу
+     * @property {number}   #chunk.value.size       - Реальний розмір частини файлу, байти
+     * @property {string}   #chunk.value.type       - Тип частини файлу
      */
     #chunk = {number: 0, offset: 0, size: {base: 0, value: 0, coefficient: 1}, value: {size: 0, type: ''}}
 
@@ -72,9 +74,9 @@ class Upload {
     #request = {action: '', data: {}, time: 0, speed: 0, retry: true}
 
     /**
-     * @property {object} #events           - Ознаки деяких дій
-     * @property {boolean} #events.pause    - Ознака призупинки завантаження
-     * @property {boolean} #events.stop     - Ознака зупинки завантаження
+     * @property {object}   #events         - Ознаки деяких дій
+     * @property {boolean}  #events.pause   - Ознака призупинки завантаження
+     * @property {boolean}  #events.stop    - Ознака зупинки завантаження
      */
     #events = {pause: false, stop: false}
 
@@ -86,7 +88,7 @@ class Upload {
     #timers = {start: 0, pause: 0}
 
     /**
-     * @property {object} #callbacks                - Функції зворотного виклику
+     * @property {object}   #callbacks              - Функції зворотного виклику
      * @property {function} #callbacks.pause        - Дії при призупинені процесу завантаження файлу
      * @property {function} #callbacks.iteration    - Дії при виконанні кожного запита на сервер
      * @property {function} #callbacks.timeout      - Дії при відсутності відповіді від сервера
@@ -175,6 +177,7 @@ class Upload {
     /**
      * Додає частину файлу на сервер
      * @see this.#request
+     * @see this.#chunk
      */
     #append = async () => {
         if (this.#events.pause) {
@@ -196,6 +199,7 @@ class Upload {
         let response = await this.#send();
         if (response === undefined) return;
         this.#chunk.offset = response;
+        this.#callbacks.iteration(this.#getStatus());
         let speed = Math.round(this.#chunk.value.size / this.#request.time);
         this.#fileList.size.uploaded += this.#chunk.value.size;
         if (this.#chunk.size.coefficient === 2) {
@@ -263,7 +267,6 @@ class Upload {
         let response = await this.#fetchExtended(url, body, retry);
         this.#request.time = ((new Date()).getTime() - this.#request.time) / 1000;
         if (response === undefined) return;
-        this.#callbacks.iteration(this.#getStatus());
         let responseText = await response.text();
         if (response.status === 200)
             return /^\d+$/.test(responseText) ? +responseText : responseText;
