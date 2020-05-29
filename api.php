@@ -55,6 +55,7 @@ try {
 
     error($error->getMessage(), $error->getFile(), $error->getLine(), $error->getCode());
 }
+
 /**
  * Перехоплення помилок
  *
@@ -95,11 +96,9 @@ function error($message, $file, $line, $type, $trace = null) {
 
     $error = sprintf('%s  %s (%s:%d, %d)', date('Y-m-d H:i:s'), $message, $file, $line, $type);
 
-    if (isset($trace))
+    if (isset($trace)) $error .= "\r\n" . $trace;
 
-        $error = sprintf("%s\r\n%s\r\n", $error, $trace);
-
-    file_put_contents(__DIR__ . '/log', $error, FILE_APPEND);
+    file_put_contents(__DIR__ . '/log', $error . "\r\n", FILE_APPEND);
 
     exit($trace ? $message : 'Внутрішня помилка сервера');
 }

@@ -82,8 +82,8 @@ class Upload {
 
     /**
      * @property {object} #timers           - Збережені часові мітки
-     * @property {number} #timers.start     - Часова мітка початку завантаження
-     * @property {number} #timers.pause     - Часова мітка призупинення завантаження
+     * @property {number} #timers.start     - Часова мітка початку завантаження, секунди
+     * @property {number} #timers.pause     - Часова мітка призупинення завантаження, секунди
      */
     #timers = {start: 0, pause: 0}
 
@@ -119,7 +119,7 @@ class Upload {
      * Починає процес завантаження файлу на сервер
      */
     start() {
-        this.#timers.start = (new Date()).getTime();
+        this.#timers.start = this.#getTime();
         this.#open().then();
     }
 
@@ -129,7 +129,7 @@ class Upload {
     pause() {
         this.#request.speed = 0;
         this.#events.pause = true;
-        this.#timers.pause = (new Date()).getTime();
+        this.#timers.pause = this.#getTime();
     }
 
     /**
@@ -137,7 +137,7 @@ class Upload {
      */
     resume() {
         this.#events.pause = null;
-        this.#timers.start = (new Date()).getTime() - (this.#timers.pause - this.#timers.start);
+        this.#timers.start = this.#getTime() - (this.#timers.pause - this.#timers.start);
         switch (this.#request.data.get('action')) {
             case 'open': this.#open().then(); break;
             case 'append': this.#append().then(); break;
@@ -320,8 +320,8 @@ class Upload {
      * @property    {number} total.numbers          - Загальна кількість файлів
      * @property    {number} total.size.uploaded    - Розмір завантаженої частини всіх файлів, байти
      * @property    {number} total.size.total       - Загальний розмір всіх файлів, байти
-     * @property    {number} total.time.elapsed     - Час з початку завантаження файлів, мілісекунди
-     * @property    {number} total.time.estimate    - Прогнозований час до завершення завантаження файлів, мілісекунди
+     * @property    {number} total.time.elapsed     - Час з початку завантаження файлів, секунди
+     * @property    {number} total.time.estimate    - Прогнозований час до завершення завантаження файлів, секунди
      */
     #getStatus = () => {
         let status = {};
@@ -348,13 +348,21 @@ class Upload {
             time: {elapsed: 0, estimate: 0}
         }
         if (this.#timers.start > 0)
-            status.total.time.elapsed = Math.round((new Date()).getTime() - this.#timers.start);
+            status.total.time.elapsed = this.#getTime() - this.#timers.start;
         if (status.total.size.uploaded > 0) {
             status.total.time.estimate =
                 Math.round(status.total.size.total / (status.total.size.uploaded / status.total.time.elapsed))
             status.total.time.estimate -= status.total.time.elapsed;
         }
         return status;
+    }
+
+    /**
+     * Повертає поточну мітку часу
+     * @returns {number} - Мітка часу, секунди
+     */
+    #getTime = () => {
+        return Math.round((new Date()).getTime() / 1000);
     }
 
     /**

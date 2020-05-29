@@ -67,10 +67,13 @@ callbacks.iteration = (status) => {
     nodes.status.time.innerHTML =
         Human.getInterval(status.total.time.elapsed) + ' / ' + Human.getInterval(status.total.time.estimate);
     console.debug(
-        Human.getNumber(status.current.size.uploaded).padStart(Human.getNumber(status.current.size.total).length) + ' Б',
-        Human.getNumber((status.chunk.size / 1024).toFixed()).padStart(Human.getNumber(settings.fileSizeLimit).length - 5) + ' КБ',
+        Human.getNumber(status.current.size.uploaded)
+            .padStart(Human.getNumber(status.current.size.total).length) + ' Б',
+        Human.getNumber((status.chunk.size / 1024).toFixed())
+            .padStart(Human.getNumber(settings.fileSizeLimit).length - 5) + ' КБ',
+        Human.getNumber(status.chunk.time.toFixed(2))
+            .padStart(Human.getNumber(settings.interval).length + 5) + ' c',
         Human.getNumber((status.chunk.speed / 1024 ** 2).toFixed(2)).padStart(7) + ' МБ/с',
-        Human.getNumber(status.chunk.time.toFixed(2)).padStart(Human.getNumber(settings.interval).length + 5) + ' c',
         '  #' + status.chunk.number.toString()
     );
 };
@@ -130,13 +133,13 @@ class Human {
         do {bytes /= thousand; ++i;} while(Math.abs(bytes) >= thousand && i < units.length - 1);
         return bytes.toFixed(digits) + ' ' + units[i];
     };
+       
     /**
      * Змінює вигляд інтервалу часу
-     * @param {number} interval - Інтервалу в мілісекундах
+     * @param {number} interval - Інтервалу в секундах
      * @returns {string} - Інтервал в форматі ГГ:ХХ:СС
      */
     static getInterval = (interval) => {
-        interval = Math.round(interval / 1000);
         let hours = Math.floor(((interval % 31536000) % 86400) / 3600);
         let minutes = Math.floor((((interval % 31536000) % 86400) % 3600) / 60);
         let seconds = (((interval % 31536000) % 86400) % 3600) % 60;
@@ -145,6 +148,7 @@ class Human {
         if (seconds.toString().length === 1) seconds = '0' + seconds;
         return hours + ':' + minutes + ':' + seconds;
     };
+
     /**
      * Відокремлює тисячі в числі
      * @param {number|string} value - Число не форматоване
