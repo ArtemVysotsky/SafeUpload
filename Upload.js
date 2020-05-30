@@ -44,10 +44,10 @@ class Upload {
      * @property {string} #file.name            - Назва файлу
      * @property {string} #file.type            - Тип файлу
      * @property {number} #file.size            - Розмір файлу, байти
-     * @property {string} #file.hash            - Хеш файлу
+     * @property {string} #file.uuid            - UUID файлу
      * @property {number} #file.lastModified    - Дата останньої зміни файлу, мілісекунди
      */
-    #file = {name: '', type: '', size: 0, hash: '', lastModified: 0}
+    #file = {name: '', type: '', size: 0, uuid: '', lastModified: 0}
 
     /**
      * @property {object}   #chunk                  - Параметри частини файлу
@@ -137,6 +137,8 @@ class Upload {
      */
     resume() {
         this.#events.pause = null;
+        this.#chunk.size.coefficient = 1;
+        this.#chunk.size.base = this.#settings.chunkSizeMinimum;
         this.#timers.start = this.#getTime() - (this.#timers.pause - this.#timers.start);
         switch (this.#request.data.get('action')) {
             case 'open': this.#open().then(); break;
@@ -168,9 +170,9 @@ class Upload {
         this.#request.data = new FormData();
         this.#request.data.set('action', 'open');
         this.#request.data.set('name', this.#file.name);
-        this.#file.hash = await this.#send();
-        if (this.#file.hash === undefined) return;
-        this.#request.data.set('hash', this.#file.hash);
+        this.#file.uuid = await this.#send();
+        if (this.#file.uuid === undefined) return;
+        this.#request.data.set('uuid', this.#file.uuid);
         await this.#append();
     }
 

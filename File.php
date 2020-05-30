@@ -18,8 +18,8 @@ class File {
     /** @var string Повна назва тимчасового файлу з шляхом */
     protected $sourceTemporary;
 
-    /** @var string Хеш файлу */
-    protected $hash;
+    /** @var string UUID файлу */
+    protected $uuid;
 
     /**
      * @var array Налаштування
@@ -72,20 +72,31 @@ class File {
     }
 
     /**
-     * Зберігає хеш файлу
+     * Створює при протребі та зберігає UUID файлу
      *
-     * @param string $hash Хеш файлу
-     * @param boolean $check Ознака перевіки файла на наявність
+     * @param string $uuid UUID файлу
      */
-    protected function setHash(string $hash, bool $check = true): void {
+    protected function setUUID(string $uuid = null): void {
 
-        $this->hash = $hash;
+        if (isset($uuid)) {
 
-        $name = $this->name . '.' . $this->hash;
+            $this->uuid = $uuid;
+
+        } else {
+
+            $this->uuid = random_bytes(16);
+
+            $this->uuid[6] = chr(ord($this->uuid[6]) & 0x0f | 0x40);
+            $this->uuid[8] = chr(ord($this->uuid[8]) & 0x3f | 0x80);
+
+            $this->uuid = vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($this->uuid), 4));
+        }
+
+        $name = $this->name . '.' . $this->uuid;
 
         $this->sourceTemporary = $this->settings['pathTemporary'] . DIRECTORY_SEPARATOR . $name;
 
-        if ($check && !file_exists($this->sourceTemporary))
+        if (isset($uuid) && !file_exists($this->sourceTemporary))
             throw new Exception('Тимчасовий файл не знайдено');
     }
 
@@ -99,24 +110,24 @@ class File {
         if (!$this->settings['isOverwrite'] && file_exists($this->source))
             throw new Exception('Файл з такою назвою вже існує');
 
-        $this->setHash(bin2hex(random_bytes(16)), false);
+        $this->setUUID();
 
         file_put_contents($this->sourceTemporary, null);
 
-        return $this->hash;
+        return $this->uuid;
     }
 
     /**
      * Додає в тимчасовий файл надісланий шматок
      *
-     * @param string $hash Хеш файлу
+     * @param string $uuid Хеш файлу
      * @param array $file Масив з даними завантаженого файлу шматка
      * @param integer $offset Зміщення фрагмента файлу відносно початку файлу
      * @return integer Розмір тимчасового файлу після запису шматка
      */
-    public function append(string $hash, array $file, int $offset): int {
+    public function append(string $uuid, array $file, int $offset): int {
 
-        $this->setHash($hash);
+        $this->setUUID($uuid);
 
         if ($file['error'] !== 0)
             throw new Exception(sprintf('Помилка завантаження (%s)', $this->errors[$file['error']]));
@@ -141,13 +152,13 @@ class File {
     /**
      * Закриває тимчасовий файл (перетворює в постійний)
      *
-     * @param string $hash Хеш файлу
+     * @param string $uuid UUID файлу
      * @param integer|null $time Час останньої модифікації файлу
      * @return integer Остаточний розмір файлу
      */
-    public function close(string $hash, int $time = null): int {
+    public function close(string $uuid, int $time = null): int {
 
-        $this->setHash($hash);
+        $this->setUUID($uuid);
 
         if (!$this->settings['isOverwrite'] && file_exists($this->source))
             throw new Exception('Файл з такою назвою вже існує');
@@ -163,11 +174,11 @@ class File {
     /**
      * Видаляє тимчасовий файл
      *
-     * @param string $hash Хеш файлу
+     * @param string $uuid UUID файлу
      */
-    public function remove(string $hash): void {
+    public function remove(string $uuid): void {
 
-        $this->setHash($hash);
+        $this->setUUID($uuid);
 
         if (file_exists($this->sourceTemporary))
             unlink($this->sourceTemporary);

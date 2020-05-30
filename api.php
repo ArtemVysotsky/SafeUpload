@@ -30,11 +30,11 @@ try {
 
         case 'open': $response = $file->open(); break;
 
-        case 'append': $response = $file->append($_POST['hash'], $_FILES['chunk'], $_POST['offset']); break;
+        case 'append': $response = $file->append($_POST['uuid'], $_FILES['chunk'], $_POST['offset']); break;
 
-        case 'close': $response = $file->close($_POST['hash'], $_POST['time'] ?? null); break;
+        case 'close': $response = $file->close($_POST['uuid'], $_POST['time'] ?? null); break;
 
-        case 'remove': $file->remove($_POST['hash']); break;
+        case 'remove': $file->remove($_POST['uuid']); break;
 
         default: throw new Exception('Невідома дія');
     }
