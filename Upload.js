@@ -9,7 +9,7 @@
 class Upload {
     /**
      * @property {object}   #settings                    - Налаштування по замовчуванню
-     * @property {string}   #settings.url                - Адреса API для завантаження файлу
+     * @property {string}   #settings.api                - Адреса API для завантаження файлу
      * @property {number}   #settings.chunkSizeMinimum   - Мінімальний розмір частини файлу, байти
      * @property {number}   #settings.chunkSizeMaximum   - Максимальний розмір частини файлу, байти
      * @property {number}   #settings.fileSizeLimit      - Максимальний розмір файлу, байти
@@ -19,7 +19,7 @@ class Upload {
      * @property {number}   #settings.retryDelay         - Тривалість паузи між повторними запитами, секунди
      */
     #settings = {
-        url: 'api',
+        api: 'api',
         chunkSizeMinimum: 1024,
         chunkSizeMaximum: 1024 ** 2,
         fileSizeLimit: 1024 ** 2,
@@ -262,7 +262,7 @@ class Upload {
      * @see this.#request
      */
     #send = async () => {
-        let url = this.#settings.url;
+        let url = this.#settings.api;
         let body = {method: 'POST', body: this.#request.data};
         let retry = (this.#request.retry) ? 1 : 0;
         this.#request.time = (new Date()).getTime();
