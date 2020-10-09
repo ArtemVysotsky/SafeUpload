@@ -19,14 +19,8 @@ class Upload {
      * @property {number}   #settings.retryDelay         - Тривалість паузи між повторними запитами, секунди
      */
     #settings = {
-        api: 'api',
-        chunkSizeMinimum: 1024,
-        chunkSizeMaximum: 1024 ** 2,
-        fileSizeLimit: 1024 ** 2,
-        interval: 1,
-        timeout: 5,
-        retryLimit: 5,
-        retryDelay: 1
+        api: 'api', chunkSizeMinimum: 1024, chunkSizeMaximum: 1024 ** 2, fileSizeLimit: 1024 ** 2,
+        interval: 1, timeout: 5, retryLimit: 5, retryDelay: 1
     }
 
     /**
