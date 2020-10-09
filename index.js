@@ -117,7 +117,7 @@ nodes.buttons.cancel.addEventListener('click', () => {
     nodes.buttons.cancel.disabled = false;
 });
 
-/** Змінює вигляд деяких велечини в зручний для людини формат */
+/** Змінює вигляд деяких велечин в зручний для людини формат */
 class Human {
     /**
      * Змінює вигляд розміру (при потребі)
@@ -136,7 +136,7 @@ class Human {
        
     /**
      * Змінює вигляд інтервалу часу
-     * @param {number} interval - Інтервалу в секундах
+     * @param {number} interval - Інтервал в секундах
      * @returns {string} - Інтервал в форматі ГГ:ХХ:СС
      */
     static getInterval = (interval) => {

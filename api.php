@@ -11,16 +11,16 @@ error_reporting(0);
 set_error_handler('errorHandler');
 register_shutdown_function('shutdownHandler');
 
+$response = '';
+
+$settings = [
+    'path'          => __DIR__ . '/uploads',
+    'pathTemporary' => __DIR__ . '/uploads/.tmp',
+    'size'          => 3 * 1024 ** 3,
+    'isOverwrite'   => true
+];
+
 try {
-
-    $response = '';
-
-    $settings = [
-        'path'          => __DIR__ . '/uploads',
-        'pathTemporary' => __DIR__ . '/uploads/.tmp',
-        'size'          => 3 * 1024 ** 3,
-        'isOverwrite'   => true
-    ];
 
     require_once('File.php');
 
@@ -41,15 +41,9 @@ try {
 
     echo $response;
 
-} catch (Exception $exception) {
+} catch (Exception $e) {
 
-    error(
-        $exception->getMessage(),
-        $exception->getFile(),
-        $exception->getLine(),
-        $exception->getCode(),
-        $exception->getTraceAsString()
-    );
+    error($e->getMessage(), $e->getFile(), $e->getLine(), $e->getCode(), $e->getTraceAsString());
 
 } catch (Error $error) {
 
@@ -88,9 +82,9 @@ function shutdownHandler() {
  * @param string $file Назва файлу, в якому виникла помилка
  * @param integer $line Номер рядка файлу, в якому виникла помилка
  * @param integer $type Тип помилки
- * @param string $trace Трасування
+ * @param string|null $trace Трасування
  */
-function error($message, $file, $line, $type, $trace = null) {
+function error(string $message, string $file, int $line, int $type, string $trace = null) {
 
     header('HTTP/1.x 500 Internal Server Error');
 

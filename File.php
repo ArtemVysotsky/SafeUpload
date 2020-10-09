@@ -1,6 +1,6 @@
 <?php
 /**
- * Збереження файлу на диск та видалення
+ * Клас для керування файлом
  *
  * @author      Артем Висоцький <a.vysotsky@gmail.com>
  * @link        https://github.com/ArtemVysotsky/SafeUpload
@@ -52,13 +52,13 @@ class File {
      * Зберігає шлях до теки зберігання завантажених файлів
      *
      * @param string $name Назва файлу
-     * @param array $settings Налаштування
+     * @param array|null $settings Налаштування
      */
     public function __construct(string $name, array $settings = null) {
 
-        $this->settings = array_merge($this->settings, $settings);
-
         $this->name = $name;
+
+        $this->settings = array_merge($this->settings, $settings);
 
         $this->setSource();
     }
@@ -74,7 +74,8 @@ class File {
     /**
      * Створює при протребі та зберігає UUID файлу
      *
-     * @param string $uuid UUID файлу
+     * @param string|null $uuid UUID файлу
+     * @throws Exception Тимчасовий файл не знайдено
      */
     protected function setUUID(string $uuid = null): void {
 
@@ -101,10 +102,11 @@ class File {
     }
 
     /**
-    * Створює тимчасовий файл
-    *
-    * @return string Хеш файлу
-    */
+     * Створює тимчасовий файл
+     *
+     * @return string Хеш файлу
+     * @throws Exception Файл з такою назвою вже існує
+     */
     public function open(): string {
 
         if (!$this->settings['isOverwrite'] && file_exists($this->source))
@@ -118,12 +120,15 @@ class File {
     }
 
     /**
-     * Додає в тимчасовий файл надісланий шматок
+     * Додає в тимчасовий файл надісланий фрагмент
      *
      * @param string $uuid Хеш файлу
-     * @param array $file Масив з даними завантаженого файлу шматка
+     * @param array $file Масив з даними завантаженого фрагмента
      * @param integer $offset Зміщення фрагмента файлу відносно початку файлу
-     * @return integer Розмір тимчасового файлу після запису шматка
+     * @return integer Розмір тимчасового файлу після запису фрагмента
+     * @throws Exception Помилка завантаження
+     * @throws Exception Неправильно завантажений файл
+     * @throws Exception Розмір файлу перевищує допустимий
      */
     public function append(string $uuid, array $file, int $offset): int {
 
@@ -155,6 +160,7 @@ class File {
      * @param string $uuid UUID файлу
      * @param integer|null $time Час останньої модифікації файлу
      * @return integer Остаточний розмір файлу
+     * @throws Exception Файл з такою назвою вже існує
      */
     public function close(string $uuid, int $time = null): int {
 
@@ -175,6 +181,7 @@ class File {
      * Видаляє тимчасовий файл
      *
      * @param string $uuid UUID файлу
+     * @throws Exception Тимчасовий файл не знайдено
      */
     public function remove(string $uuid): void {
 

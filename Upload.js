@@ -8,7 +8,7 @@
 
 class Upload {
     /**
-     * @property {object}   #settings                    - Налаштування по замовчуванню
+     * @property {object}   #settings                    - Налаштування за замовчуванням
      * @property {string}   #settings.api                - Адреса API для завантаження файлу
      * @property {number}   #settings.chunkSizeMinimum   - Мінімальний розмір частини файлу, байти
      * @property {number}   #settings.chunkSizeMaximum   - Максимальний розмір частини файлу, байти
@@ -33,7 +33,7 @@ class Upload {
      * @property {object} #fileList                - Перелік FileList з файлами File та додатковими параметрами
      * @property {object} #fileList.files          - Перелік FileList
      * @property {object} #fileList.size           - Дані про розмір всіх файлів
-     * @property {number} #fileList.size.uploaded  - Ррозмір завантажених частин файлів, байти
+     * @property {number} #fileList.size.uploaded  - Розмір завантажених частин файлів, байти
      * @property {number} #fileList.size.total     - Загальний розмір всіх файлів, байти
      * @property {number} #fileList.current        - Номер поточного файлу
      */
@@ -92,8 +92,9 @@ class Upload {
      * @property {function} #callbacks.pause        - Дії при призупинені процесу завантаження файлу
      * @property {function} #callbacks.iteration    - Дії при виконанні кожного запита на сервер
      * @property {function} #callbacks.timeout      - Дії при відсутності відповіді від сервера
-     * @property {function} #callbacks.resolve      - Дії при завершені процесу завантаження файлу
-     * @property {function} #callbacks.reject       - Дії при винекненні помилки під час процесу
+     * @property {function} #callbacks.resolve      - Дії при вдалому завершені процесу завантаження файлу
+     * @property {function} #callbacks.reject       - Дії при не вдалому завершені процесу завантаження файлу
+     * @property {function} #callbacks.finally      - Дії при завершені процесу завантаження файлу
      */
     #callbacks = {
         pause: () => {}, iteration: () => {}, timeout: () => {}, resolve: () => {}, reject: () => {}, finally: () => {}
@@ -103,7 +104,7 @@ class Upload {
      * Конструктор
      * @param {object} files - Перелік FileList з файлами File
      * @param {object} [settings] - Налаштування
-     * @param {object} [callbacks] - Зворотні функції
+     * @param {object} [callbacks] - Функції зворотного виклику
      */
     constructor(files, settings = {}, callbacks = {}) {
         this.#fileList.files = files;
@@ -182,14 +183,8 @@ class Upload {
      * @see this.#chunk
      */
     #append = async () => {
-        if (this.#events.pause) {
-            this.#callbacks.pause();
-            return;
-        }
-        if (this.#events.stop) {
-            this.#remove();
-            return;
-        }
+        if (this.#events.pause) {this.#callbacks.pause();return;}
+        if (this.#events.stop) {this.#remove();return;}
         this.#chunk.number ++;
         this.#chunk.size.value =
             this.#chunk.size.base * this.#chunk.size.coefficient;
@@ -257,7 +252,7 @@ class Upload {
     }
 
     /**
-     * Готує запит до сервера та витягує дані з відповіді
+     * Формує запит до сервера та витягує дані з відповіді
      * @returns {object|void} - Відформатована відповідь сервера
      * @see this.#request
      */
@@ -312,11 +307,11 @@ class Upload {
      * Вираховує та повертає дані про статус процесу завантаження файлу
      * @returns     {object}
      * @property    {number} chunk.number           - Номер частини файлу
-     * @property    {number} chunk.size             - Розмір частини файлу
-     * @property    {number} chunk.time             - Час завантаження частини файлу
+     * @property    {number} chunk.size             - Розмір частини файлу, байти
+     * @property    {number} chunk.time             - Час завантаження частини файлу, секунди
      * @property    {number} chunk.speed            - Швидкість завантаження частини файлу, байти/секунду
      * @property    {number} current.number         - Номер поточного файлу
-     * @property    {number} current.name           - Назва поточного файлу
+     * @property    {string} current.name           - Назва поточного файлу
      * @property    {number} current.size.uploaded  - Розмір завантаженої частини поточного файлу, байти
      * @property    {number} current.size.total     - Загальний розмір поточного файлу, байти
      * @property    {number} total.numbers          - Загальна кількість файлів
@@ -368,7 +363,7 @@ class Upload {
     }
 
     /**
-     * Викидає помилку
+     * Виконує дії при помилці
      * @param {string} message - Текст помилки
      */
     #error = (message) => {
