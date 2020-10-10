@@ -26,15 +26,15 @@ class Upload {
     /**
      * @property {object} #fileList                - Перелік FileList з файлами File та додатковими параметрами
      * @property {object} #fileList.files          - Перелік FileList
-     * @property {object} #fileList.size           - Дані про розмір всіх файлів
+     * @property {object} #fileList.size           - Дані про розмір усіх файлів
      * @property {number} #fileList.size.uploaded  - Розмір завантажених частин файлів, байти
-     * @property {number} #fileList.size.total     - Загальний розмір всіх файлів, байти
+     * @property {number} #fileList.size.total     - Загальний розмір усіх файлів, байти
      * @property {number} #fileList.current        - Номер поточного файлу
      */
     #fileList = {files: {}, size: {uploaded: 0, total: 0}, current: 0}
 
     /**
-     * @property {object} #file                 - Файл File зі вмістимим та додатковими параметрами
+     * @property {object} #file                 - Файл File з даними та додатковими параметрами
      * @property {string} #file.name            - Назва файлу
      * @property {string} #file.type            - Тип файлу
      * @property {number} #file.size            - Розмір файлу, байти
@@ -69,7 +69,7 @@ class Upload {
 
     /**
      * @property {object}   #events         - Ознаки деяких дій
-     * @property {boolean}  #events.pause   - Ознака призупинки завантаження
+     * @property {boolean}  #events.pause   - Ознака призупинення завантаження
      * @property {boolean}  #events.stop    - Ознака зупинки завантаження
      */
     #events = {pause: false, stop: false}
@@ -83,12 +83,12 @@ class Upload {
 
     /**
      * @property {object}   #callbacks              - Функції зворотного виклику
-     * @property {function} #callbacks.pause        - Дії при призупинені процесу завантаження файлу
-     * @property {function} #callbacks.iteration    - Дії при виконанні кожного запита на сервер
-     * @property {function} #callbacks.timeout      - Дії при відсутності відповіді від сервера
-     * @property {function} #callbacks.resolve      - Дії при вдалому завершені процесу завантаження файлу
-     * @property {function} #callbacks.reject       - Дії при не вдалому завершені процесу завантаження файлу
-     * @property {function} #callbacks.finally      - Дії при завершені процесу завантаження файлу
+     * @property {function} #callbacks.pause        - Дії в разі призупинення процесу завантаження файлу
+     * @property {function} #callbacks.iteration    - Дії в разі виконання кожного запита на сервер
+     * @property {function} #callbacks.timeout      - Дії в разі відсутності відповіді від сервера
+     * @property {function} #callbacks.resolve      - Дії в разі вдалого завершення процесу завантаження файлу
+     * @property {function} #callbacks.reject       - Дії в разі не вдалого завершення процесу завантаження файлу
+     * @property {function} #callbacks.finally      - Дії в разі завершення процесу завантаження файлу
      */
     #callbacks = {
         pause: () => {}, iteration: () => {}, timeout: () => {}, resolve: () => {}, reject: () => {}, finally: () => {}
@@ -265,7 +265,7 @@ class Upload {
     }
 
     /**
-     * Відправляє запит на сервер з таймаутом та повторними запитами при потребі
+     * Відправляє запит на сервер з timeout та retry в разі необхідності
      * @param {string} url - Адреса запиту
      * @param {object} body - Дані запиту
      * @param {number} [retry=1] - Номер повторного запиту, 0 - без повторів
